@@ -1,0 +1,8 @@
+const fields=[
+ ['Welcome message','.hero .lead'],['Mission date','.status>div:nth-child(1) strong'],['Date note','.status>div:nth-child(1) small'],['Rally point','.status>div:nth-child(2) strong'],['Location note','.status>div:nth-child(2) small'],['Arrival','.status>div:nth-child(3) strong'],['Arrival note','.status>div:nth-child(3) small'],
+ ...Array.from({length:6},(_,i)=>[['Schedule '+(i+1)+' time','.event:nth-child('+(i+1)+') .time'],['Schedule '+(i+1)+' title','.event:nth-child('+(i+1)+') h3'],['Schedule '+(i+1)+' description','.event:nth-child('+(i+1)+') p']]).flat(),
+ ...Array.from({length:4},(_,i)=>[['Game '+(i+1)+' title','#games .card:nth-child('+(i+1)+') h3'],['Game '+(i+1)+' description','#games .card:nth-child('+(i+1)+') p']]).flat(),
+ ...Array.from({length:3},(_,i)=>[['Food '+(i+1)+' title','#feast .card:nth-child('+(i+1)+') h3'],['Food '+(i+1)+' description','#feast .card:nth-child('+(i+1)+') p']]).flat(),
+ ['Closing message','.closing p']
+]; const sections=[['Schedule','#mission'],['Squad rule','.rule'],['Games','#games'],['Feast','#feast'],['Closing message','.closing']];
+fetch('/api/settings',{cache:'no-store'}).then(r=>r.ok?r.json():{}).then(data=>{for(const [i,item] of fields.entries()){if(typeof data.text?.[i]==='string'){const e=document.querySelector(item[1]); if(e)e.textContent=data.text[i]}}for(const [i,item] of sections.entries()){if(data.hidden?.[i]===true){const e=document.querySelector(item[1]); if(e)e.hidden=true; const link=document.querySelector('nav a[href="'+item[1]+'"]');if(link)link.hidden=true}}}).catch(()=>{});
