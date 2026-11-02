@@ -1,8 +1,37 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-let teams=[],guests=[],revision=null,dirty=false;
+let teams=[],guests=[],draftRevision=null,publishedBaseline='[]',dirty=false;
+let saving=false,publishing=false,blocked=false,version=0,autosaveTimer=null,savePromise=null;
 const cards=$('teamCards'),status=$('teamStatus'),save=$('saveTeams');
-function markDirty(){dirty=true;save.disabled=false;status.textContent='Unsaved team assignments. Select Publish teams to update the main page.'}
+const serial=teamList=>JSON.stringify(teamList);
+function refreshPublishButton(){save.disabled=publishing||blocked||serial(teams)===publishedBaseline}
+function markDirty(){
+ dirty=true;version++;status.textContent='Draft changed · Saving automatically…';
+ refreshPublishButton();clearTimeout(autosaveTimer);
+ if(!blocked)autosaveTimer=setTimeout(saveDraft,700);
+}
+async function saveDraft(){
+ clearTimeout(autosaveTimer);autosaveTimer=null;
+ if(blocked||!dirty)return !blocked;
+ if(saving){await savePromise;if(dirty&&!blocked)return saveDraft();return !blocked}
+ saving=true;const snapshot=structuredClone(teams),sentVersion=version,atRevision=draftRevision;
+ status.textContent='Autosaving private team draft…';
+ savePromise=(async()=>{
+  try{
+   const response=await fetch('/admin/api/team-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teams:snapshot,revision:atRevision})});
+   const result=await response.json().catch(()=>({}));
+   if(response.status===409){blocked=true;throw Error('Team draft changed in another tab. Your unsaved edits are still here; refresh to review before saving again.')}
+   if(!response.ok)throw Error(result.error||'Could not autosave teams. Please try editing again.');
+   draftRevision=result.revision;
+   if(sentVersion===version)dirty=false;
+   status.textContent=dirty?'Saving newer team edits…':serial(teams)===publishedBaseline?'✓ Draft autosaved · Already published':'✓ Draft autosaved · Not yet published';
+  }catch(e){dirty=true;status.textContent='⚠ '+e.message}
+  finally{saving=false;refreshPublishButton();if(dirty&&!blocked&&version!==sentVersion){clearTimeout(autosaveTimer);autosaveTimer=setTimeout(saveDraft,400)}}
+ })();
+ await savePromise;
+ return !dirty&&!blocked;
+}
+
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function btn(label,action,cls){const b=el('button',cls,label);b.type='button';b.addEventListener('click',action);return b}
 function input(label,value,limit,change){const l=el('label','edit-label',label),i=el('input');i.type='text';i.maxLength=limit;i.value=value||'';i.addEventListener('input',()=>change(i.value));l.append(i);return {label:l,input:i}}
@@ -20,7 +49,7 @@ function randomizeTeams(){
 }
 function render(){
  cards.replaceChildren();
- if(!teams.length)cards.append(el('p','empty','No teams published yet. Add a team to create the squad assignments.'));
+ if(!teams.length)cards.append(el('p','empty','No teams in your draft yet. Create a team to begin.'));
  teams.forEach((team,index)=>{
   const card=el('article','team-card');
   const h=el('h2','',team.name||'New team');card.append(h);
@@ -96,24 +125,38 @@ function openEditor(index){
 }
 async function start(){
  try{
-  const r=await fetch('/admin/api/teams',{cache:'no-store'});
-  if(!r.ok)throw Error('Unable to load team assignments.');
-  const data=await r.json();
-  if(!Array.isArray(data.teams)||!Number.isSafeInteger(data.revision))throw Error('Unexpected team data.');
-  teams=data.teams;guests=Array.isArray(data.guests)?data.guests:[];revision=data.revision;dirty=false;
-  $('addTeam').disabled=false;save.disabled=true;render();
-  status.textContent='Changes appear on the public Friendsgiving page after you publish.';
- }catch(e){status.textContent=e.message;$('addTeam').disabled=true;save.disabled=true}
+  const response=await fetch('/admin/api/team-draft',{cache:'no-store'});
+  if(!response.ok)throw Error('Unable to load saved team drafts.');
+  const result=await response.json();
+  if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
+  teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];draftRevision=result.revision;
+  publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
+  $('addTeam').disabled=false;render();refreshPublishButton();
+  status.textContent=serial(teams)===publishedBaseline?'Autosave on · All teams already published':'Autosave on · Private team draft recovered, not published';
+ }catch(e){status.textContent='⚠ '+e.message;$('addTeam').disabled=true;save.disabled=true}
 }
 $('addTeam').addEventListener('click',()=>openEditor(null));
 $('randomizeTeams').addEventListener('click',randomizeTeams);
-save.addEventListener('click',async()=>{save.disabled=true;status.textContent='Publishing team assignments…';try{
- const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teams,revision})});
- const data=await r.json().catch(()=>({}));
- if(r.status===409)throw Error('Another organizer saved changes. Refresh to review the latest teams before publishing.');
- if(!r.ok)throw Error(data.error||'Unable to publish teams.');
- revision=data.revision;teams=data.teams;dirty=false;render();status.textContent='Published! The public page now shows your teams.';save.disabled=true;
- }catch(e){status.textContent=e.message;save.disabled=false}});
-window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+save.addEventListener('click',async()=>{
+ if(blocked||publishing)return;
+ publishing=true;save.disabled=true;
+ try{
+  if(dirty||saving){const saved=await saveDraft();if(!saved)throw Error('Draft must be saved before publishing. Review the autosave status.')}
+  const latest=await fetch('/admin/api/teams',{cache:'no-store'});
+  if(!latest.ok)throw Error('Unable to confirm the published lineup.');
+  const current=await latest.json();
+  if(serial(current.teams||[])!==publishedBaseline)throw Error('Someone else published a new lineup. Refresh to review it before publishing yours.');
+  const publishingVersion=version,snapshot=structuredClone(teams);
+  status.textContent='Publishing saved team assignments…';
+  const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teams:snapshot,revision:current.revision})});
+  const result=await r.json().catch(()=>({}));
+  if(r.status===409)throw Error('The guest list changed during publication. Refresh and review before publishing.');
+  if(!r.ok)throw Error(result.error||'Unable to publish team lineup.');
+  publishedBaseline=serial(result.teams);status.textContent=version===publishingVersion?'✓ Teams published! The main page is updated.':'✓ Earlier draft published; newer edits still need publishing.';
+ }catch(e){status.textContent='⚠ '+e.message}
+ finally{publishing=false;refreshPublishButton()}
+});
+window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&dirty&&!blocked)saveDraft()});
+window.addEventListener('beforeunload',e=>{if(dirty||saving||publishing){e.preventDefault();e.returnValue=''}});
 start();
 })();
