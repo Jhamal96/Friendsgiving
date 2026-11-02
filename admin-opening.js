@@ -43,5 +43,5 @@ video.addEventListener('ended',reveal);
 video.addEventListener('error',visualFallback);
 window.addEventListener('friendsgiving:admin-intro-acknowledged',begin,{once:true});
 // Avoid trapping the admin behind video if another script fails to initialize.
-window.setTimeout(()=>{if(!started&&!finished)begin()},12000);
+window.setTimeout(()=>{if(!started&&!finished&&!document.getElementById('adminUpdates')?.open&&!document.getElementById('adminAbout')?.open)begin()},12000);
 })();
