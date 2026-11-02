@@ -71,7 +71,7 @@ function openEditor(index){
  const draft=creating?{id:'team-'+crypto.randomUUID(),name:'',caption:'',captain:'',members:[]}:structuredClone(teams[index]);
  const modal=$('editTeam');$('editTeamTitle').textContent=creating?'Add a team':'Edit team';
  const area=$('teamFields');area.replaceChildren();
- for(const [label,key,max] of [['Team name','name',80],['Team caption / motto','caption',220],['Team captain','captain',100]]){
+ for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
  const caption=el('p','muted',creating?'Create and save this team first. After creating all teams, use Randomize Teams to distribute confirmed guests.':'Adjust assigned members manually here, or return to Randomize Teams to redistribute everyone.');area.append(caption);
