@@ -1,3 +1,4 @@
+import {reconcileTeams,formEligible,nameKey as eligibleKey} from '../../_lib/team-eligibility.js';
 // Admin team drafts are stored separately from published teams.
 // Public /api/teams reads only organizer_data.teams, never team_drafts.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -32,18 +33,21 @@ const validTeams=input=>{
 export async function onRequestGet({request,env}){
  if(!validHost(new URL(request.url).hostname))return reply({error:'Invalid host'},403);
  try{
-  const [draft,current]=await Promise.all([
+  const refreshed=await reconcileTeams(env.FRIENDSGIVING_DB);
+  const [draft,current,form]=await Promise.all([
    env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM team_drafts WHERE id=1').first(),
-   env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first()
+   env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first(),
+   env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first()
   ]);
-  if(!draft||!current)return reply({error:'Team drafts unavailable'},503);
-  const organizer=JSON.parse(current.content);
-  const confirmed=new Map();
-  for(const g of organizer.guests||[]){
-   const name=clean(g?.[0]),rsvp=clean(g?.[3]).toLowerCase();
-   if(name&&['yes','confirmed','attending'].includes(rsvp)&&!confirmed.has(name.toLowerCase()))confirmed.set(name.toLowerCase(),name);
-  }
-  return reply({teams:JSON.parse(draft.content),revision:draft.revision,guests:Array.from(confirmed.values()).sort((a,b)=>a.localeCompare(b)),publishedTeams:organizer.teams||[]});
+  if(!draft||!current||!form)return reply({error:'Team drafts unavailable'},503);
+  const organizer=JSON.parse(current.content),matched=formEligible(organizer,JSON.parse(form.data));
+  return reply({
+   teams:JSON.parse(draft.content),revision:draft.revision,
+   guests:matched.eligible.map(p=>p.name).sort((a,b)=>a.localeCompare(b)),
+   eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
+   publishedTeams:organizer.teams||[],
+   syncWarning:refreshed.ok?null:refreshed.error
+  });
  }catch{return reply({error:'Unable to load team drafts'},503)}
 }
 export async function onRequestPost({request,env}){
@@ -57,6 +61,15 @@ export async function onRequestPost({request,env}){
   if(!Number.isSafeInteger(body.revision)||body.revision<1)return reply({error:'Invalid draft revision'},400);
   const teams=validTeams(body.teams);
   if(!teams)return reply({error:'Invalid or duplicate team assignments'},400);
+  const [organizer,form]=await Promise.all([
+   env.FRIENDSGIVING_DB.prepare('SELECT content FROM organizer_data WHERE id=1').first(),
+   env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first()
+  ]);
+  if(!organizer||!form)return reply({error:'Guest matching unavailable'},503);
+  const eligible=new Set(formEligible(JSON.parse(organizer.content),JSON.parse(form.data)).eligible.map(p=>eligibleKey(p.name)));
+  for(const team of teams)for(const name of team.members){
+   if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid and RSVP-confirmed form participants can be added: '+name},400);
+  }
   const result=await env.FRIENDSGIVING_DB.prepare('UPDATE team_drafts SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(teams),body.revision).run();
   if(!result.meta.changes)return reply({error:'Team draft changed in another tab. Refresh to review the latest changes.'},409);
   return reply({teams,revision:body.revision+1,ok:true});
