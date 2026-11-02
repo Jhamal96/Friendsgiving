@@ -1,3 +1,4 @@
+import {reconcileTeams} from '../_lib/team-eligibility.js';
 // Google Apps Script -> Cloudflare D1. Never expose the sync credential in browser code.
 // The existing public /api/teams endpoint does not expose planner/payment fields.
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -71,7 +72,8 @@ export async function onRequestPost({request,env}){
    if(!save.meta.changes)return json({error:'Planner was edited during sync; retry shortly'},409);
   }
   await env.FRIENDSGIVING_DB.prepare('INSERT INTO sheet_sync_status (id,last_check_at,last_success_at,last_changes,last_conflicts,last_error) VALUES (1,?,?,?,?,NULL) ON CONFLICT(id) DO UPDATE SET last_check_at=excluded.last_check_at,last_success_at=excluded.last_success_at,last_changes=excluded.last_changes,last_conflicts=excluded.last_conflicts,last_error=NULL').bind(now,now,cellChanges+added,conflicts.length).run();
-  return json({ok:true,matched:incoming.size,updatedCells:cellChanges,addedGuests:added,conflicts:conflicts.length,revision:changed?row.revision+1:row.revision});
+  const teamRefresh=await reconcileTeams(env.FRIENDSGIVING_DB);
+  return json({ok:true,matched:incoming.size,updatedCells:cellChanges,addedGuests:added,conflicts:conflicts.length,revision:(changed?row.revision+1:row.revision)+(teamRefresh.ok&&teamRefresh.publicResult?.changed?1:0),teamsAutoUpdated:teamRefresh.ok&&teamRefresh.changed,teamWarning:teamRefresh.ok?null:teamRefresh.error});
  }catch(e){return json({error:'Synchronization failed'},500)}
 }
 export async function onRequestGet({env}){
