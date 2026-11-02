@@ -3,6 +3,7 @@ const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-C
 const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
 const validHost=host=>['ajd-friendsgiving.pages.dev','friendsgiving.ajdapp.org'].includes(host);
 const clean=s=>typeof s==='string'?s.trim():'';
+const nameKey=s=>String(s||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en-US');
 const confirmedGuests=data=>{
  const names=new Map();
  for(const row of Array.isArray(data.guests)?data.guests:[]){
@@ -33,6 +34,15 @@ export async function onRequestPost({request,env}){
   const {teams,revision}=JSON.parse(raw);
   if(!Number.isSafeInteger(revision)||!Array.isArray(teams)||teams.length>32)return reply({error:'Invalid team list'},400);
   const ids=new Set(),assigned=new Set(),cleaned=[];
+  // Captain names count as reserved players, even though they aren't duplicated in members.
+  for(const team of teams){
+   if(!team||typeof team.captain!=='string'||clean(team.captain).length>100)return reply({error:'Invalid team captain'},400);
+   const captain=nameKey(team.captain);
+   if(captain){
+    if(assigned.has(captain))return reply({error:'A captain cannot lead more than one team or appear twice'},400);
+    assigned.add(captain);
+   }
+  }
   for(const t of teams){
    if(!t||typeof t!=='object'||Array.isArray(t)||typeof t.id!=='string'||!/^[a-zA-Z0-9_-]{1,90}$/.test(t.id)||ids.has(t.id))return reply({error:'Invalid or duplicate team ID'},400);
    ids.add(t.id);
@@ -40,7 +50,7 @@ export async function onRequestPost({request,env}){
    const members=[];
    for(const member of t.members){
     if(typeof member!=='string'||!clean(member)||clean(member).length>100)return reply({error:'Invalid member name'},400);
-    const name=clean(member),key=name.toLocaleLowerCase('en-US');
+    const name=clean(member),key=nameKey(name);
     if(assigned.has(key))return reply({error:'A guest can only belong to one team: '+name},400);
     assigned.add(key);members.push(name);
    }
@@ -50,9 +60,9 @@ export async function onRequestPost({request,env}){
   if(!row)return reply({error:'Planner unavailable'},503);
   if(row.revision!==revision)return reply({error:'The teams were updated elsewhere. Refresh before saving.'},409);
   const data=JSON.parse(row.content);
-  const confirmed=new Set(confirmedGuests(data).map(n=>n.toLocaleLowerCase('en-US')));
+  const confirmed=new Set(confirmedGuests(data).map(nameKey));
   for(const team of cleaned)for(const member of team.members){
-   if(!confirmed.has(member.toLocaleLowerCase('en-US')))return reply({error:'Only RSVP-confirmed guests can be assigned: '+member},400);
+   if(!confirmed.has(nameKey(member)))return reply({error:'Only RSVP-confirmed guests can be assigned: '+member},400);
   }
   const next={...data,teams:cleaned};
   const saved=await env.FRIENDSGIVING_DB.prepare('UPDATE organizer_data SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(next),revision).run();
