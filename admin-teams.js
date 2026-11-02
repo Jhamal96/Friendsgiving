@@ -47,11 +47,11 @@ function randomizeTeams(){
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
  const captains=captainNames();
  if(captains.error){status.textContent='⚠ '+captains.error;return}
- if(!guests.length){status.textContent='No RSVP-confirmed guests are available.';return}
+ if(!guests.length){status.textContent='No form participants have both Paid and RSVP marked Yes yet.';return}
  const confirmed=new Map();
  for(const guest of guests){const key=nameKey(guest);if(key&&!confirmed.has(key))confirmed.set(key,guest)}
  const available=Array.from(confirmed.entries()).filter(([key])=>!captains.names.has(key)).map(([,guest])=>guest);
- if(teams.some(t=>t.members.length)&&!confirm('Randomize all confirmed guests across the teams? Each captain will stay on their own team and count once. This replaces the current private draft assignments.'))return;
+ if(teams.some(t=>t.members.length)&&!confirm('Randomize the form participants with Paid = Yes and RSVP = Yes across the teams? Captains stay in place. This replaces the current private draft assignments.'))return;
  // Fisher-Yates with unbiased random indices; no captain can be chosen.
  for(let i=available.length-1;i>0;i--){const j=randomIndex(i+1);[available[i],available[j]]=[available[j],available[i]]}
  teams.forEach(t=>{t.members=[]});
@@ -64,7 +64,7 @@ function randomizeTeams(){
   teams[index].members.push(guest);teamSize[index]++;
  }
  markDirty();render();
- status.textContent='Randomized '+confirmed.size+' confirmed guests; captains stay on their own teams, without duplicates. Draft autosaves; select Publish teams when ready.';
+ status.textContent='Randomized '+confirmed.size+' paid and confirmed form participants; captains stay put. Draft autosaves; select Publish teams when ready.';
 }
 function render(){
  cards.replaceChildren();
@@ -93,10 +93,10 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted',creating?'Create and save this team first. After creating all teams, use Randomize Teams to distribute confirmed guests.':'Adjust assigned members manually here, or return to Randomize Teams to redistribute everyone.');area.append(caption);
+ const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams will include only form participants marked both paid and RSVP-confirmed.':'Choose verified paid and RSVP-confirmed form participants, or return to Randomize Teams to rebalance.');area.append(caption);
  if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
- memberSelect.setAttribute('aria-label','Confirmed guests available for this team');
+ memberSelect.setAttribute('aria-label','Form participants who are paid and RSVP confirmed');
  const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
  error.setAttribute('role','status');availableCount.setAttribute('aria-live','polite');
  const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>nameKey(m)===nameKey(name)));
@@ -105,11 +105,11 @@ function openEditor(index){
  function drawChoices(){
   const choices=availableGuests(),previous=memberSelect.value;
   memberSelect.replaceChildren();
-  const placeholder=el('option','','Select a confirmed guest…');placeholder.value='';memberSelect.append(placeholder);
+  const placeholder=el('option','','Select an eligible form participant…');placeholder.value='';memberSelect.append(placeholder);
   choices.forEach(g=>{const option=el('option','',g);option.value=g;memberSelect.append(option)});
   memberSelect.value=choices.includes(previous)?previous:'';
   memberSelect.disabled=!choices.length;addButton.disabled=!choices.length;randomButton.disabled=!choices.length;
-  availableCount.textContent=choices.length+' confirmed '+(choices.length===1?'guest':'guests')+' available to assign';
+  availableCount.textContent=choices.length+' eligible form '+(choices.length===1?'participant':'participants')+' available';
  }
  function drawMembers(){
   members.replaceChildren();
@@ -128,7 +128,7 @@ function openEditor(index){
  const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
  const randomButton=btn('🎲 Random Pick',()=>{
   const available=availableGuests();
-  if(!available.length){error.textContent='No unassigned confirmed guests are available.';return}
+  if(!available.length){error.textContent='No unassigned paid and confirmed form participants are available.';return}
   // Use the browser's random values, avoiding modulo bias for a fair random pick.
   const max=0x100000000,limit=Math.floor(max/available.length)*available.length;
   let value;do{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);value=bytes[0]}while(value>=limit);
@@ -160,9 +160,11 @@ async function start(){
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
   teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];draftRevision=result.revision;
+  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
+  if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
   publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
   $('addTeam').disabled=false;render();refreshPublishButton();
-  status.textContent=serial(teams)===publishedBaseline?'Autosave on · All teams already published':'Autosave on · Private team draft recovered, not published';
+  if(!result.syncWarning)status.textContent=serial(teams)===publishedBaseline?'Autosave on · All teams already published':'Autosave on · Private team draft recovered, not published';
  }catch(e){status.textContent='⚠ '+e.message;$('addTeam').disabled=true;save.disabled=true}
 }
 $('addTeam').addEventListener('click',()=>openEditor(null));
