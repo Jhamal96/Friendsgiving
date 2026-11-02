@@ -48,10 +48,29 @@ function openEditor(index){
  cancel.onclick=()=>modal.close();
  modal.showModal();area.querySelector('input').focus();
 }
-async function start(){try{const r=await fetch('/admin/api/teams',{cache:'no-store'});if(!r.ok)throw Error('Unable to load teams.');const data=await r.json();if(!Array.isArray(data.teams)||!Number.isSafeInteger(data.revision))throw Error('Unexpected team data.');teams=data.teams;guests=Array.isArray(data.guests)?data.guests:[];revision=data.revision;save.disabled=true;render();status.textContent='Changes appear on the public Friendsgiving page after you publish.'}catch(e){status.textContent=e.message;$('addTeam').disabled=true;save.disabled=true}}
+const accessName='friendsgiving-team-editor-key';let accessKey='';try{accessKey=sessionStorage.getItem(accessName)||''}catch{}
+function lock(){accessKey='';try{sessionStorage.removeItem(accessName)}catch{}$('teamManager').hidden=true;$('teamLogin').hidden=false;$('teamAccessCode').value='';$('teamAccessStatus').textContent='Enter the organizer code to unlock team editing.'}
+async function start(){
+ $('teamManager').hidden=true;$('teamLogin').hidden=false;
+ if(!accessKey)return;
+ $('teamAccessStatus').textContent='Checking organizer access…';
+ try{
+  const r=await fetch('/admin/api/teams',{cache:'no-store',headers:{'X-Teams-Admin-Key':accessKey}});
+  if(r.status===401){lock();$('teamAccessStatus').textContent='Incorrect organizer code. Please try again.';return}
+  if(!r.ok)throw Error('Unable to load team assignments.');
+  const data=await r.json();
+  if(!Array.isArray(data.teams)||!Number.isSafeInteger(data.revision))throw Error('Unexpected team data.');
+  teams=data.teams;guests=Array.isArray(data.guests)?data.guests:[];revision=data.revision;dirty=false;
+  try{sessionStorage.setItem(accessName,accessKey)}catch{}
+  $('teamLogin').hidden=true;$('teamManager').hidden=false;$('addTeam').disabled=false;save.disabled=true;render();$('teamAccessStatus').textContent='';
+  status.textContent='Changes appear on the public Friendsgiving page after you publish.';
+ }catch(e){$('teamAccessStatus').textContent=e.message}
+}
+$('teamLoginForm').addEventListener('submit',e=>{e.preventDefault();accessKey=$('teamAccessCode').value.trim();start()});
+$('lockTeams').addEventListener('click',()=>{if(dirty&&!confirm('Discard unsaved team changes and lock the editor?'))return;dirty=false;lock()});
 $('addTeam').addEventListener('click',()=>openEditor(null));
 save.addEventListener('click',async()=>{save.disabled=true;status.textContent='Publishing team assignments…';try{
- const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teams,revision})});
+ const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json','X-Teams-Admin-Key':accessKey},body:JSON.stringify({teams,revision})});
  const data=await r.json().catch(()=>({}));
  if(r.status===409)throw Error('Another organizer saved changes. Refresh to review the latest teams before publishing.');
  if(!r.ok)throw Error(data.error||'Unable to publish teams.');
