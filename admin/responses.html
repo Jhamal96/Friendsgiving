@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#080f1b"><title>Form Response Matching | Friendsgiving Admin</title>
+<link rel="stylesheet" href="/responsive.css"><link rel="stylesheet" href="/admin-connections.css">
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;color:#f3f7ff;background:linear-gradient(#071424cc,#091526ed),url('/battlefield.png') center/cover fixed;font:16px/1.5 system-ui}
+main{max-width:1040px;margin:auto;padding:22px clamp(15px,4vw,35px) 90px}
+a{color:#ffdf48}h1,h2{font-family:Impact,'Arial Narrow',system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}h1{font-size:clamp(2.2rem,7vw,4.6rem);line-height:1.05;margin:8px 0 16px}
+.admin-top{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;background:#0a1b2ded;padding:10px 0}
+.menu-wrap{position:relative}.menu-wrap summary{cursor:pointer;list-style:none;padding:10px 15px;border:1px solid #7290b1;background:#123251;border-radius:7px}.menu-list{position:absolute;left:0;top:100%;background:#153655;border:1px solid #6689ad;border-radius:9px;padding:10px;display:grid;gap:8px;width:min(310px,90vw);box-shadow:0 15px 35px #000c}.menu-list a{padding:7px;text-decoration:none;color:white}
+.settings-button{width:44px;height:44px;border:1px solid #7da2cb;border-radius:8px;color:#ffdf48;background:#123251;font-size:25px;cursor:pointer}
+button{min-height:44px;padding:10px 15px;border:1px solid #7f98b6;border-radius:7px;background:#174773;color:#fff;font-weight:750;cursor:pointer}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #ffd630;outline-offset:3px}
+.intro{color:#baccdf;max-width:710px}.notice{border-left:4px solid #ffd630;background:#10233c;padding:15px 18px;border-radius:8px;margin:20px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:25px 0}
+.stat{padding:18px;background:#0e2c4b;border:1px solid #5c80aa;border-top:4px solid #ffd630;border-radius:10px}.stat strong{display:block;color:#ffd630;font-size:2rem}.stat span{font-size:.84rem;color:#cbd9ea}
+.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
+.group{min-width:0;padding:20px;background:#102640eb;border:1px solid #476d96;border-radius:11px}
+.group h2{font-size:1.65rem;color:#ffd630;margin:0 0 12px}
+.group ul{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:410px;overflow:auto}
+.group li{background:#193858;border-radius:8px;padding:10px 12px;display:flex;gap:14px;justify-content:space-between;align-items:center;overflow-wrap:anywhere}
+.group small{color:#b8d0e9;font-size:.74rem}dialog{width:min(95vw,730px);max-height:88dvh;overflow:auto;padding:24px;border:1px solid #7895b5;border-top:5px solid #ffd630;border-radius:12px;background:#0c2036;color:white}dialog::backdrop{background:#000b}
+@media(max-width:600px){.groups{grid-template-columns:1fr}.group{padding:15px}.stat strong{font-size:1.7rem}}
+</style></head><body><main>
+<header class="admin-top"><details class="menu-wrap"><summary>☰ Menu</summary><nav class="menu-list" aria-label="Organizer navigation"><a href="/admin/">Mission Control</a><a href="/admin/planner">Squad Planner</a><a href="/admin/teams">Team Assignments</a><a href="/admin/responses">Form Responses</a><a href="/">Friends' Page</a></nav></details><button id="responseSettingsButton" class="settings-button" type="button" aria-label="Connection settings">⚙</button></header>
+<p style="color:#ffd630;font-weight:800;letter-spacing:.12em">◆ FRIENDSGIVING / PRIVATE ORGANIZER WORKSPACE</p><h1>Response matching.</h1>
+<p class="intro">Match responses to your existing Friendsgiving guest and payment list without creating duplicate guests or changing RSVP/payment records. This view is not linked from the public event page.</p>
+<div class="notice">Only the short guest names already in your planner are shown here. Unmatched responses are identified by their source row number; check the original Google Sheet for names, contact information, and dietary notes. <strong>The admin URL is not protected by a login</strong>, so full private form details are not displayed here.</div>
+<div class="stats"><div class="stat"><strong id="responseCount">—</strong><span>Distinct form respondents</span></div><div class="stat"><strong id="matchCount">—</strong><span>Matched existing guests</span></div><div class="stat"><strong id="reviewCount">—</strong><span>Needs manual review</span></div><div class="stat"><strong id="plusOneCount">—</strong><span>Plus-ones matched</span></div></div>
+<p id="responseStatus" role="status" aria-live="polite">Loading response matches…</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0"><button id="reloadMatches" type="button">Refresh matches</button><a style="align-self:center" href="https://docs.google.com/spreadsheets/d/1JRPCoLs2pB44-WyiGvACL0nnDVeiyj_NrgHS8cYrluY/edit?usp=drivesdk" target="_blank" rel="noopener noreferrer">Open original responses Sheet</a></div>
+<div class="groups">
+<section class="group"><h2>Matched</h2><ul id="matchedNames"></ul></section>
+<section class="group"><h2>Needs review</h2><ul id="reviewRows"></ul></section>
+<section class="group"><h2>Plus-one matching</h2><ul id="plusOneMatches"></ul></section>
+</div>
+<dialog id="responsesSettings" aria-labelledby="responsesSettingsTitle"><h2 id="responsesSettingsTitle">Organizer connection settings</h2><p>Google Sheets and the HALO response form connection are listed here. No contact or allergy data is published to the public site.</p><button type="button" id="closeResponsesSettings">Close settings</button></dialog>
+</main><script defer src="/device-layout.js"></script><script src="/admin-connections.js"></script><script src="/admin-responses.js"></script></body></html>
