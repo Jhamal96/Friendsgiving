@@ -102,4 +102,9 @@ body>main .section-head{min-width:0}
  body>header nav a{padding-block:7px}
  .admin-top summary,.admin-top button,button,.button{min-height:44px}
 }
+/* Reserve space for the Skip control instead of obscuring video on small screens. */
+html[data-device="phone"][data-orientation="portrait"] #fgLoader{padding-bottom:calc(62px + env(safe-area-inset-bottom,0px))}
+html[data-device="phone"][data-orientation="landscape"] #fgLoader{padding-right:calc(105px + env(safe-area-inset-right,0px))}
+html[data-device="phone"][data-orientation="landscape"] #fgLoader .skip{right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));padding:9px 11px}
+html[data-device="tablet"] #fgLoader video{object-fit:contain}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
