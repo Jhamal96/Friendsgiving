@@ -4,9 +4,16 @@ const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-C
 const reply=(x,status=200)=>new Response(JSON.stringify(x),{status,headers});
 const clean=v=>typeof v==='string'?v.trim():'';
 const validHost=v=>['ajd-friendsgiving.pages.dev','friendsgiving.ajdapp.org'].includes(v);
+const nameKey=s=>String(s||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en-US');
 const validTeams=input=>{
  if(!Array.isArray(input)||input.length>32)return null;
  const ids=new Set(),used=new Set(),output=[];
+ // Reserve captains first so no captain can be assigned to a different roster.
+ for(const t of input){
+  if(!t||typeof t.captain!=='string')return null;
+  const captain=nameKey(t.captain);
+  if(captain){if(used.has(captain))return null;used.add(captain)}
+ }
  for(const t of input){
   if(!t||Array.isArray(t)||typeof t!=='object'||typeof t.id!=='string'||!/^[a-zA-Z0-9_-]{1,90}$/.test(t.id)||ids.has(t.id))return null;
   ids.add(t.id);
@@ -14,7 +21,7 @@ const validTeams=input=>{
   const members=[];
   for(const member of t.members){
    if(typeof member!=='string'||!clean(member)||clean(member).length>100)return null;
-   const v=clean(member),key=v.toLocaleLowerCase('en-US');
+   const v=clean(member),key=nameKey(v);
    if(used.has(key))return null;
    used.add(key);members.push(v);
   }
