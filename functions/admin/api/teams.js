@@ -3,6 +3,16 @@ const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-C
 const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
 const validHost=host=>['ajd-friendsgiving.pages.dev','friendsgiving.ajdapp.org'].includes(host);
 const clean=s=>typeof s==='string'?s.trim():'';
+const confirmedGuests=data=>{
+ const names=new Map();
+ for(const row of Array.isArray(data.guests)?data.guests:[]){
+  if(!Array.isArray(row)||typeof row[0]!=='string'||typeof row[3]!=='string')continue;
+  const name=clean(row[0]),rsvp=clean(row[3]).toLocaleLowerCase('en-US');
+  if(!name||!['yes','confirmed','attending'].includes(rsvp))continue;
+  if(name.length<=100&&!names.has(name.toLocaleLowerCase('en-US')))names.set(name.toLocaleLowerCase('en-US'),name);
+ }
+ return Array.from(names.values()).slice(0,500).sort((a,b)=>a.localeCompare(b));
+};
 const safeTeams=teams=>Array.isArray(teams)?teams.map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,members:t.members})).filter(t=>t&&typeof t.name==='string'):[];
 export async function onRequestGet({request,env}){
  try{
@@ -10,7 +20,7 @@ export async function onRequestGet({request,env}){
   const row=await env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first();
   if(!row)return reply({error:'Team manager is unavailable'},503);
   const data=JSON.parse(row.content);
-  return reply({teams:safeTeams(data.teams),guests:Array.from(new Set((data.guests||[]).map(g=>clean(g[0])).filter(Boolean))).slice(0,500),revision:row.revision});
+  return reply({teams:safeTeams(data.teams),guests:confirmedGuests(data),revision:row.revision});
  }catch{return reply({error:'Team manager is unavailable'},503)}
 }
 export async function onRequestPost({request,env}){
@@ -40,6 +50,10 @@ export async function onRequestPost({request,env}){
   if(!row)return reply({error:'Planner unavailable'},503);
   if(row.revision!==revision)return reply({error:'The teams were updated elsewhere. Refresh before saving.'},409);
   const data=JSON.parse(row.content);
+  const confirmed=new Set(confirmedGuests(data).map(n=>n.toLocaleLowerCase('en-US')));
+  for(const team of cleaned)for(const member of team.members){
+   if(!confirmed.has(member.toLocaleLowerCase('en-US')))return reply({error:'Only RSVP-confirmed guests can be assigned: '+member},400);
+  }
   const next={...data,teams:cleaned};
   const saved=await env.FRIENDSGIVING_DB.prepare('UPDATE organizer_data SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(next),revision).run();
   if(!saved.meta.changes)return reply({error:'The teams changed. Refresh before saving.'},409);
