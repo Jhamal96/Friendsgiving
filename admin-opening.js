@@ -1,17 +1,14 @@
 (()=>{'use strict';
 const wrap=document.getElementById('fgLoader'),video=document.getElementById('fgOpeningVideo'),skip=document.getElementById('fgSkip');
 if(!wrap||!video||!skip)return;
-const onceKey='friendsgiving-admin-opening-played-v1';
+// Every visit, navigation, or refresh starts a new intro sequence.
 let started=false,finished=false,watchdog=null,fallbackTimer=null;
-function safeRead(){try{return sessionStorage.getItem(onceKey)==='yes'}catch{return false}}
-function safeWrite(){try{sessionStorage.setItem(onceKey,'yes')}catch{}}
 function reveal(){
  if(finished)return;
  finished=true;
  window.clearTimeout(watchdog);
  window.clearTimeout(fallbackTimer);
  try{video.pause()}catch{}
- safeWrite();
  document.body.classList.add('fg-admin-reveal');
  wrap.classList.add('is-done');
  window.setTimeout(()=>{
@@ -29,7 +26,6 @@ function visualFallback(){
 function begin(){
  if(started||finished)return;
  started=true;
- if(safeRead()){wrap.remove();return}
  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){reveal();return}
  wrap.classList.add('is-playing');
  watchdog=window.setTimeout(reveal,18000);
