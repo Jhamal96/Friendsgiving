@@ -1,4 +1,4 @@
-import {reconcileTeams,formEligible,nameKey as eligibleKey} from '../../_lib/team-eligibility.js';
+import {reconcileTeams,formEligible,nameKey as eligibleKey,cleanName} from '../../_lib/team-eligibility.js';
 // Admin team drafts are stored separately from published teams.
 // Public /api/teams reads only organizer_data.teams, never team_drafts.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -22,11 +22,11 @@ const validTeams=input=>{
   const members=[];
   for(const member of t.members){
    if(typeof member!=='string'||!clean(member)||clean(member).length>100)return null;
-   const v=clean(member),key=nameKey(v);
+   const v=cleanName(member)+(String(member).trim().endsWith('+1')?' +1':''),key=nameKey(v);
    if(used.has(key))return null;
    used.add(key);members.push(v);
   }
-  output.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:clean(t.captain),members});
+  output.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),members});
  }
  return output;
 };
@@ -44,6 +44,8 @@ export async function onRequestGet({request,env}){
   return reply({
    teams:JSON.parse(draft.content),revision:draft.revision,
    guests:matched.eligible.map(p=>p.name).sort((a,b)=>a.localeCompare(b)),
+   guestGroups:matched.groups,
+   isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
    publishedTeams:organizer.teams||[],
    syncWarning:refreshed.ok?null:refreshed.error
@@ -66,7 +68,21 @@ export async function onRequestPost({request,env}){
    env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first()
   ]);
   if(!organizer||!form)return reply({error:'Guest matching unavailable'},503);
-  const eligible=new Set(formEligible(JSON.parse(organizer.content),JSON.parse(form.data)).eligible.map(p=>eligibleKey(p.name)));
+  const matched=formEligible(JSON.parse(organizer.content),JSON.parse(form.data));
+  const eligible=new Set(matched.eligible.map(p=>eligibleKey(p.name)));
+  const canonical=name=>matched.aliases.get(eligibleKey(name))||eligibleKey(name);
+  const captainOwners=new Map(),owners=new Map();
+  for(let i=0;i<teams.length;i++){
+   const k=canonical(teams[i].captain);
+   if(k)captainOwners.set(k,i);
+  }
+  for(let i=0;i<teams.length;i++)for(const name of teams[i].members)owners.set(canonical(name),i);
+  for(const g of matched.groups){
+   if(!g.plusOne)continue;
+   const parent=canonical(g.primary),child=canonical(g.plusOne);
+   const a=captainOwners.get(parent)??owners.get(parent),b=owners.get(child);
+   if(a!==undefined&&b!==undefined&&a!==b)return reply({error:'Keep '+g.plusOne+' with their participant on the same team.'},400);
+  }
   for(const team of teams)for(const name of team.members){
    if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid and RSVP-confirmed form participants can be added: '+name},400);
   }
