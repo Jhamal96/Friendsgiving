@@ -3,9 +3,22 @@ const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-C
 const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
 const validHost=host=>['ajd-friendsgiving.pages.dev','friendsgiving.ajdapp.org'].includes(host);
 const clean=s=>typeof s==='string'?s.trim():'';
+async function allowed(request,env){
+ const key=request.headers.get('X-Teams-Admin-Key')||'';
+ if(key.length<20||key.length>100)return false;
+ const row=await env.FRIENDSGIVING_DB.prepare('SELECT secret_sha256 FROM team_admin_auth WHERE id=1').first();
+ if(!row?.secret_sha256)return false;
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key));
+ const supplied=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+ if(supplied.length!==row.secret_sha256.length)return false;
+ let difference=0;for(let i=0;i<supplied.length;i++)difference|=supplied.charCodeAt(i)^row.secret_sha256.charCodeAt(i);
+ return difference===0;
+}
 const safeTeams=teams=>Array.isArray(teams)?teams.map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,members:t.members})).filter(t=>t&&typeof t.name==='string'):[];
-export async function onRequestGet({env}){
+export async function onRequestGet({request,env}){
  try{
+  if(!validHost(new URL(request.url).hostname))return reply({error:'Invalid host'},403);
+  if(!await allowed(request,env))return reply({error:'Team organizer access code required'},401);
   const row=await env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first();
   if(!row)return reply({error:'Team manager is unavailable'},503);
   const data=JSON.parse(row.content);
@@ -15,6 +28,7 @@ export async function onRequestGet({env}){
 export async function onRequestPost({request,env}){
  const u=new URL(request.url);
  if(!validHost(u.hostname)||request.headers.get('Origin')!==u.origin)return reply({error:'Invalid origin'},403);
+ if(!await allowed(request,env))return reply({error:'Team organizer access code required'},401);
  if(!String(request.headers.get('Content-Type')||'').startsWith('application/json'))return reply({error:'JSON required'},415);
  try{
   const raw=await request.text();
