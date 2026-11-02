@@ -8,8 +8,9 @@ const headers={
 };
 const reply=(result,status=200)=>new Response(JSON.stringify(result),{status,headers});
 const validHost=hostname=>['ajd-friendsgiving.pages.dev','friendsgiving.ajdapp.org'].includes(hostname);
-const normalized=value=>String(value||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en-US');
+const normalized=value=>{const s=String(value||'').trim(),plus=/\+\s*1\s*$/.test(s),part=plus?s.replace(/\+\s*1\s*$/,''):s;return part.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').trim().replace(/\s+/g,' ').toLowerCase()+(plus?' +1':'')};
 function publishedTeams(data){
+ if(data.teamsPublished===false)return [];
  return Array.isArray(data.teams)?data.teams.filter(team=>team&&typeof team.name==='string'&&team.name.trim()&&Array.isArray(team.members)):[];
 }
 export async function onRequestGet({request,env}){
