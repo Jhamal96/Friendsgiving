@@ -35,17 +35,36 @@ async function saveDraft(){
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function btn(label,action,cls){const b=el('button',cls,label);b.type='button';b.addEventListener('click',action);return b}
 function input(label,value,limit,change){const l=el('label','edit-label',label),i=el('input');i.type='text';i.maxLength=limit;i.value=value||'';i.addEventListener('input',()=>change(i.value));l.append(i);return {label:l,input:i}}
-function uniqueMembers(xs){return xs.map(x=>x.trim()).filter((x,i,a)=>x&&a.findIndex(y=>y.toLowerCase()===x.toLowerCase())===i)}
+function nameKey(name){return String(name||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en-US')}
+function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=nameKey(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
+function captainNames(){
+ const names=new Map();
+ for(const t of teams){const name=(t.captain||'').trim(),key=nameKey(name);if(!key)continue;if(names.has(key))return {error:'Captain '+name+' is already assigned to '+names.get(key)+'. Give each team its own captain.'};names.set(key,t.name||'another team')}
+ return {names:new Set(names.keys())};
+}
 function randomIndex(length){const top=4294967296,limit=Math.floor(top/length)*length;let n;do{const x=new Uint32Array(1);crypto.getRandomValues(x);n=x[0]}while(n>=limit);return n%length}
 function randomizeTeams(){
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
+ const captains=captainNames();
+ if(captains.error){status.textContent='⚠ '+captains.error;return}
  if(!guests.length){status.textContent='No RSVP-confirmed guests are available.';return}
- if(teams.some(t=>t.members.length)&&!confirm('Randomize all confirmed guests across your teams? This will replace your current assignments (not yet published).'))return;
- const shuffled=guests.slice();
- for(let i=shuffled.length-1;i>0;i--){const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]}
+ const confirmed=new Map();
+ for(const guest of guests){const key=nameKey(guest);if(key&&!confirmed.has(key))confirmed.set(key,guest)}
+ const available=Array.from(confirmed.entries()).filter(([key])=>!captains.names.has(key)).map(([,guest])=>guest);
+ if(teams.some(t=>t.members.length)&&!confirm('Randomize all confirmed guests across the teams? Each captain will stay on their own team and count once. This replaces the current private draft assignments.'))return;
+ // Fisher-Yates with unbiased random indices; no captain can be chosen.
+ for(let i=available.length-1;i>0;i--){const j=randomIndex(i+1);[available[i],available[j]]=[available[j],available[i]]}
  teams.forEach(t=>{t.members=[]});
- shuffled.forEach((guest,i)=>teams[i%teams.length].members.push(guest));
- markDirty();render();status.textContent='Randomized '+shuffled.length+' confirmed guests evenly across '+teams.length+' teams. Review, adjust and Publish teams when ready.';
+ // Include each captain in team size when balancing, without duplicating them in members.
+ const teamSize=teams.map(t=>nameKey(t.captain)?1:0);
+ for(const guest of available){
+  const min=Math.min(...teamSize),choices=[];
+  for(let i=0;i<teamSize.length;i++)if(teamSize[i]===min)choices.push(i);
+  const index=choices[randomIndex(choices.length)];
+  teams[index].members.push(guest);teamSize[index]++;
+ }
+ markDirty();render();
+ status.textContent='Randomized '+confirmed.size+' confirmed guests; captains stay on their own teams, without duplicates. Draft autosaves; select Publish teams when ready.';
 }
 function render(){
  cards.replaceChildren();
@@ -55,7 +74,7 @@ function render(){
   const h=el('h2','',team.name||'New team');card.append(h);
   if(team.caption)card.append(el('p','team-caption',team.caption));
   card.append(el('p','muted','Captain: '+(team.captain||'To be announced')));
-  const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'None assigned yet'));card.append(roster);
+  const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'No additional players yet'));card.append(roster);
   const actions=el('div','team-actions');
   actions.append(btn('Edit team',()=>openEditor(index),'primary'));
   const up=btn('↑',()=>move(index,-1)),down=btn('↓',()=>move(index,1));up.title='Move team up';down.title='Move team down';up.disabled=index===0;down.disabled=index===teams.length-1;actions.append(up,down);
@@ -63,7 +82,7 @@ function render(){
   card.append(actions);cards.append(card);
  });
  $('randomizeTeams').disabled=teams.length<2||!guests.length;
- $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+t.members.length,0)+' assigned members';
+ $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+t.members.length+(nameKey(t.captain)?1:0),0)+' assigned people (captains included)';
 }
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
 function openEditor(index){
@@ -80,8 +99,9 @@ function openEditor(index){
  memberSelect.setAttribute('aria-label','Confirmed guests available for this team');
  const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
  error.setAttribute('role','status');availableCount.setAttribute('aria-live','polite');
- const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>m.toLocaleLowerCase('en-US')===name.toLocaleLowerCase('en-US')));
- const availableGuests=()=>guests.filter(g=>!draft.members.some(m=>m.toLocaleLowerCase('en-US')===g.toLocaleLowerCase('en-US'))&&!assignedElsewhere(g));
+ const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>nameKey(m)===nameKey(name)));
+ const reservedByCaptain=name=>teams.some((t,j)=>(j!==index||nameKey(t.captain)!==nameKey(draft.captain))&&nameKey(t.captain)&&nameKey(t.captain)===nameKey(name))||nameKey(draft.captain)===nameKey(name);
+ const availableGuests=()=>guests.filter(g=>!reservedByCaptain(g)&&!draft.members.some(m=>nameKey(m)===nameKey(g))&&!assignedElsewhere(g));
  function drawChoices(){
   const choices=availableGuests(),previous=memberSelect.value;
   memberSelect.replaceChildren();
@@ -117,9 +137,19 @@ function openEditor(index){
  entry.append(memberSelect,addButton,randomButton);
  if(!creating)area.append(entry,availableCount,members,error);else area.append(error);drawMembers();drawChoices();
  const submit=$('confirmTeam'),cancel=$('cancelTeam');
- submit.onclick=()=>{if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
+ submit.onclick=()=>{
+ if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
  draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=draft.captain.trim();draft.members=uniqueMembers(draft.members);
- if(creating)teams.push(draft);else teams[index]=draft;modal.close();markDirty();render()};
+ const key=nameKey(draft.captain);
+ if(key){
+  const conflict=teams.some((t,i)=>i!==index&&(nameKey(t.captain)===key||t.members.some(m=>nameKey(m)===key)));
+  if(conflict){error.textContent='This captain is already assigned to another team. Choose a different captain or remove their other assignment first.';return}
+  // A captain belongs on their own team, never twice as an additional member.
+  draft.members=draft.members.filter(m=>nameKey(m)!==key);
+ }
+ if(creating)teams.push(draft);else teams[index]=draft;
+ modal.close();markDirty();render()
+};
  cancel.onclick=()=>modal.close();
  modal.showModal();area.querySelector('input').focus();
 }
