@@ -7,6 +7,17 @@ function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className
 function btn(label,action,cls){const b=el('button',cls,label);b.type='button';b.addEventListener('click',action);return b}
 function input(label,value,limit,change){const l=el('label','edit-label',label),i=el('input');i.type='text';i.maxLength=limit;i.value=value||'';i.addEventListener('input',()=>change(i.value));l.append(i);return {label:l,input:i}}
 function uniqueMembers(xs){return xs.map(x=>x.trim()).filter((x,i,a)=>x&&a.findIndex(y=>y.toLowerCase()===x.toLowerCase())===i)}
+function randomIndex(length){const top=4294967296,limit=Math.floor(top/length)*length;let n;do{const x=new Uint32Array(1);crypto.getRandomValues(x);n=x[0]}while(n>=limit);return n%length}
+function randomizeTeams(){
+ if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
+ if(!guests.length){status.textContent='No RSVP-confirmed guests are available.';return}
+ if(teams.some(t=>t.members.length)&&!confirm('Randomize all confirmed guests across your teams? This will replace your current assignments (not yet published).'))return;
+ const shuffled=guests.slice();
+ for(let i=shuffled.length-1;i>0;i--){const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]}
+ teams.forEach(t=>{t.members=[]});
+ shuffled.forEach((guest,i)=>teams[i%teams.length].members.push(guest));
+ markDirty();render();status.textContent='Randomized '+shuffled.length+' confirmed guests evenly across '+teams.length+' teams. Review, adjust and Publish teams when ready.';
+}
 function render(){
  cards.replaceChildren();
  if(!teams.length)cards.append(el('p','empty','No teams published yet. Add a team to create the squad assignments.'));
@@ -22,6 +33,7 @@ function render(){
   actions.append(btn('Remove',()=>{if(!confirm('Remove '+(team.name||'this team')+' from the team lineup?'))return;teams.splice(index,1);markDirty();render()},'danger'));
   card.append(actions);cards.append(card);
  });
+ $('randomizeTeams').disabled=teams.length<2||!guests.length;
  $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+t.members.length,0)+' assigned members';
 }
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
@@ -33,7 +45,8 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team caption / motto','caption',220],['Team captain','captain',100]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted','Choose an RSVP-confirmed guest from the dropdown, or use Random Pick to add an available guest.');area.append(caption);
+ const caption=el('p','muted',creating?'Create and save this team first. After creating all teams, use Randomize Teams to distribute confirmed guests.':'Adjust assigned members manually here, or return to Randomize Teams to redistribute everyone.');area.append(caption);
+ if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
  memberSelect.setAttribute('aria-label','Confirmed guests available for this team');
  const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
@@ -73,7 +86,7 @@ function openEditor(index){
   addMember(available[value%available.length]);
  },'random-pick');
  entry.append(memberSelect,addButton,randomButton);
- area.append(entry,availableCount,members,error);drawMembers();drawChoices();
+ if(!creating)area.append(entry,availableCount,members,error);else area.append(error);drawMembers();drawChoices();
  const submit=$('confirmTeam'),cancel=$('cancelTeam');
  submit.onclick=()=>{if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
  draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=draft.captain.trim();draft.members=uniqueMembers(draft.members);
@@ -93,6 +106,7 @@ async function start(){
  }catch(e){status.textContent=e.message;$('addTeam').disabled=true;save.disabled=true}
 }
 $('addTeam').addEventListener('click',()=>openEditor(null));
+$('randomizeTeams').addEventListener('click',randomizeTeams);
 save.addEventListener('click',async()=>{save.disabled=true;status.textContent='Publishing team assignments…';try{
  const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teams,revision})});
  const data=await r.json().catch(()=>({}));
