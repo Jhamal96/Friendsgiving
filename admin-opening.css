@@ -1,0 +1,62 @@
+/* Friendsgiving Mission Control: adaptive cinematic introduction and admin layouts. */
+#fgLoader{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,#123960 0%,#061325 65%,#030912 100%);visibility:hidden;opacity:0;pointer-events:none;isolation:isolate;transition:opacity .7s ease;overflow:hidden}
+#fgLoader.is-playing{visibility:visible;opacity:1;pointer-events:auto}
+#fgLoader.is-done{visibility:visible;opacity:0;pointer-events:none}
+#fgLoader video{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
+#fgLoader .skip{position:absolute;z-index:3;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));padding:12px 18px;min-height:44px;max-width:90vw;border:1px solid #ffd630;border-radius:9px;color:#ffe48a;background:#071d33df;font:800 .89rem system-ui;cursor:pointer;box-shadow:0 12px 30px #0008;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#fgLoader .skip:focus-visible{outline:3px solid #ffd630;outline-offset:4px}
+#fgLoader .intro-fallback{display:none;position:absolute;inset:0;z-index:1;align-content:center;justify-items:center;text-align:center;gap:16px;padding:32px 20px;background:linear-gradient(140deg,#071525df,#103f6ddb),url('/battlefield.png') center / cover no-repeat}
+#fgLoader.fg-video-error .intro-fallback{display:grid}
+#fgLoader.fg-video-error video{opacity:0}
+#fgLoader .intro-fallback .halo-ring{width:min(32vw,180px);aspect-ratio:1;border:5px solid #ffd63080;border-top-color:#ffd630;border-radius:50%;box-shadow:0 0 45px #2f83be80,inset 0 0 35px #1d6aa380;animation:fgAdminSpin 1.4s linear infinite}
+#fgLoader .intro-fallback strong{font:clamp(1.8rem,5vw,3.5rem)/1 Impact,'Arial Narrow',system-ui,sans-serif;letter-spacing:.11em;color:#ffd630;text-shadow:0 0 20px #163d66}
+#fgLoader .intro-fallback span{color:#e3edff;font-size:clamp(.8rem,2.8vw,1rem);font-weight:750;letter-spacing:.18em;text-transform:uppercase}
+@keyframes fgAdminSpin{to{transform:rotate(360deg)}}
+#fgLoader.is-done::after{content:"";position:absolute;inset:0;z-index:5;pointer-events:none;background:linear-gradient(90deg,transparent 0%,#ffd63088 49%,#65b7fb88 51%,transparent 100%);transform:translateX(-160%);animation:fgAdminScan .82s ease-in-out forwards}
+@keyframes fgAdminScan{to{transform:translateX(160%)}}
+body.fg-admin-reveal>main{animation:fgAdminReveal 1.04s cubic-bezier(.16,.72,.3,1) both}
+@keyframes fgAdminReveal{from{opacity:.18;filter:blur(7px);transform:translateY(24px) scale(.988)}to{opacity:1;filter:blur(0);transform:none}}
+/* Mobile and tablet usability, including landscape phones and small tablets. */
+body>main{max-width:min(100%,1050px);min-width:0;padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+body>main>.admin-top{min-width:0;gap:12px;align-items:center}
+.admin-top .menu-wrap summary{min-height:44px}
+.admin-top .settings-button{flex:0 0 44px;min-width:44px;min-height:44px}
+.admin-top .menu-list{max-height:min(70dvh,470px);overflow:auto}
+body>main .panel,body>main .group,body>main .guest,body>main .team-card,body>main .line{max-width:100%;min-width:0}
+body>main input,body>main textarea,body>main select{min-width:0}
+body>main .team-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,285px),1fr))}
+body>main .controls,body>main .toolbar,body>main .bar{min-width:0}
+#teamFields .member-entry>select{flex:1 1 210px}
+#teamFields .member-entry>button{flex:0 1 auto}
+@media(max-width:700px){
+ body>main{padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+ body>main>.admin-top{padding:10px 0;margin-bottom:15px}
+ body>main h1{font-size:clamp(2.15rem,9.8vw,3.2rem);overflow-wrap:anywhere}
+ body>main h2{font-size:clamp(1.45rem,6.5vw,2.3rem);overflow-wrap:anywhere}
+ body>main .line{flex-wrap:wrap;gap:9px}
+ body>main .line label{flex:1 1 min(100%,190px)}
+ body>main .line input{font-size:16px}
+ body>main .toolbar button,body>main .controls button{min-height:44px}
+ body>main .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ body>main .controls a{grid-column:1/-1;justify-self:start;padding:7px 0}
+ body>main .controls button{width:100%;white-space:normal}
+ body>main .team-grid{grid-template-columns:minmax(0,1fr)}
+ body>main .bar{bottom:0;box-sizing:border-box;max-width:100%;gap:9px}
+ body>main .bar>*{min-width:0}
+ dialog,.admin-pop{width:min(96vw,540px);max-height:calc(100dvh - 24px);overflow:auto}
+ #teamFields .member-entry>select{flex:1 1 100%}
+ #teamFields .member-entry>button{flex:1 1 auto}
+}
+@media(max-width:390px){
+ body>main .controls{grid-template-columns:minmax(0,1fr)}
+ body>main .controls a{grid-column:1}
+ .admin-top .menu-wrap summary{padding-inline:10px;font-size:.9rem}
+ body>main .bar{flex-direction:column;align-items:stretch}
+}
+@media(orientation:landscape) and (max-height:550px){
+ #fgLoader .skip{bottom:calc(10px + env(safe-area-inset-bottom,0px));right:calc(10px + env(safe-area-inset-right,0px))}
+}
+@media(prefers-reduced-motion:reduce){
+ #fgLoader,#fgLoader.is-done,body.fg-admin-reveal>main{transition:none;animation:none}
+ #fgLoader.is-done::after,#fgLoader .intro-fallback .halo-ring{animation:none}
+}
