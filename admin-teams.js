@@ -33,14 +33,47 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team caption / motto','caption',220],['Team captain','captain',100]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted','Team members (choose an existing guest or type a new name)');area.append(caption);
- const entry=el('div','member-entry'),name=el('input'),list=el('datalist');name.type='text';name.maxLength=100;name.placeholder='Choose or enter a guest name';const listId='guestChoices';list.id=listId;name.setAttribute('list',listId);
- guests.forEach(g=>{const option=el('option');option.value=g;list.append(option)});
- const members=el('div','member-list'),error=el('p','error');error.setAttribute('role','status');
- const drawMembers=()=>{members.replaceChildren();if(!draft.members.length)members.append(el('span','muted','No members assigned yet'));draft.members.forEach((g,i)=>{const chip=el('span','member-chip',g+' ');chip.append(btn('×',()=>{draft.members.splice(i,1);drawMembers()},'remove-member'));members.append(chip)})};
- const add=()=>{const member=name.value.trim();if(!member)return;if(draft.members.some(m=>m.toLowerCase()===member.toLowerCase())){error.textContent='This person is already on this team.';return}const assignedElsewhere=teams.some((t,j)=>j!==index&&t.members.some(m=>m.toLowerCase()===member.toLowerCase()));if(assignedElsewhere){error.textContent=member+' is already assigned to another team.';return}draft.members.push(member);name.value='';error.textContent='';drawMembers()};
- entry.append(name,btn('+ Add member',add));name.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();add()}});
- area.append(entry,list,members,error);drawMembers();
+ const caption=el('p','muted','Choose an RSVP-confirmed guest from the dropdown, or use Random Pick to add an available guest.');area.append(caption);
+ const entry=el('div','member-entry'),memberSelect=el('select');
+ memberSelect.setAttribute('aria-label','Confirmed guests available for this team');
+ const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
+ error.setAttribute('role','status');availableCount.setAttribute('aria-live','polite');
+ const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>m.toLocaleLowerCase('en-US')===name.toLocaleLowerCase('en-US')));
+ const availableGuests=()=>guests.filter(g=>!draft.members.some(m=>m.toLocaleLowerCase('en-US')===g.toLocaleLowerCase('en-US'))&&!assignedElsewhere(g));
+ function drawChoices(){
+  const choices=availableGuests(),previous=memberSelect.value;
+  memberSelect.replaceChildren();
+  const placeholder=el('option','','Select a confirmed guest…');placeholder.value='';memberSelect.append(placeholder);
+  choices.forEach(g=>{const option=el('option','',g);option.value=g;memberSelect.append(option)});
+  memberSelect.value=choices.includes(previous)?previous:'';
+  memberSelect.disabled=!choices.length;addButton.disabled=!choices.length;randomButton.disabled=!choices.length;
+  availableCount.textContent=choices.length+' confirmed '+(choices.length===1?'guest':'guests')+' available to assign';
+ }
+ function drawMembers(){
+  members.replaceChildren();
+  if(!draft.members.length)members.append(el('span','muted','No members assigned yet'));
+  draft.members.forEach((g,i)=>{
+   const chip=el('span','member-chip',g+' ');
+   chip.append(btn('×',()=>{draft.members.splice(i,1);drawMembers();drawChoices()},'remove-member'));
+   members.append(chip);
+  });
+ }
+ function addMember(member){
+  if(!member){error.textContent='Choose a confirmed guest first.';return}
+  if(!availableGuests().includes(member)){error.textContent='This guest is already assigned or no longer confirmed.';return}
+  draft.members.push(member);error.textContent='';drawMembers();drawChoices();
+ }
+ const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
+ const randomButton=btn('🎲 Random Pick',()=>{
+  const available=availableGuests();
+  if(!available.length){error.textContent='No unassigned confirmed guests are available.';return}
+  // Use the browser's random values, avoiding modulo bias for a fair random pick.
+  const max=0x100000000,limit=Math.floor(max/available.length)*available.length;
+  let value;do{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);value=bytes[0]}while(value>=limit);
+  addMember(available[value%available.length]);
+ },'random-pick');
+ entry.append(memberSelect,addButton,randomButton);
+ area.append(entry,availableCount,members,error);drawMembers();drawChoices();
  const submit=$('confirmTeam'),cancel=$('cancelTeam');
  submit.onclick=()=>{if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
  draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=draft.captain.trim();draft.members=uniqueMembers(draft.members);
