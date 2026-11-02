@@ -33,6 +33,7 @@ let p=$('p','','Source: ');link(p,'HALO FRIENDSGIVING FIELD DAY 🏆 (Responses)
  form.append($('p','fg-note','Form submissions are matched to existing guests without changing payment status or publishing any form details on the public Friendsgiving page.'));
  form.append($('p','fg-restricted','Only matching summaries are shown here. Contact details and dietary/allergy notes stay in the original Sheet; the admin pages are currently not sign-in protected.'));
  actions(form,checkForm,'Review guest matches','/admin/responses');
+ const setup=$('p','fg-note','To receive future form submissions automatically, install the private response synchronization script in the original Google Sheet.');form.append(setup);link(form,'Response connection setup instructions','https://github.com/Jhamal96/Friendsgiving/blob/main/integrations/FORM-RESPONSES.md');
  root.append(google,form);
  const heading=box.querySelector('h2');
  if(heading)heading.insertAdjacentElement('afterend',root);
