@@ -1,4 +1,4 @@
-import {formEligible,nameKey as eligibleKey} from '../../_lib/team-eligibility.js';
+import {formEligible,nameKey as eligibleKey,cleanName,balanceTeams} from '../../_lib/team-eligibility.js';
 // Admin-side team management. The public endpoint never returns planner/payment details.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
@@ -22,7 +22,7 @@ export async function onRequestGet({request,env}){
   const row=await env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first();
   if(!row)return reply({error:'Team manager is unavailable'},503);
   const data=JSON.parse(row.content);
-  return reply({teams:safeTeams(data.teams),guests:confirmedGuests(data),revision:row.revision});
+  return reply({teams:safeTeams(data.teams),isPublished:data.teamsPublished===true||(data.teamsPublished!==false&&Array.isArray(data.teams)&&data.teams.length>0),revision:row.revision});
  }catch{return reply({error:'Team manager is unavailable'},503)}
 }
 export async function onRequestPost({request,env}){
@@ -32,13 +32,32 @@ export async function onRequestPost({request,env}){
  try{
   const raw=await request.text();
   if(raw.length>100000)return reply({error:'Request too large'},413);
-  const {teams,revision}=JSON.parse(raw);
-  if(!Number.isSafeInteger(revision)||!Array.isArray(teams)||teams.length>32)return reply({error:'Invalid team list'},400);
+  const {action='publish',teams,revision}=JSON.parse(raw);
+  if(!Number.isSafeInteger(revision)||revision<0)return reply({error:'Invalid revision'},400);
+  if(!['publish','unpublish'].includes(action))return reply({error:'Invalid action'},400);
+  const prior=await env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first();
+  if(!prior)return reply({error:'Planner unavailable'},503);
+  if(prior.revision!==revision)return reply({error:'The teams changed elsewhere. Refresh before continuing.'},409);
+  const data=JSON.parse(prior.content);
+  if(action==='unpublish'){
+   // Retain private drafts and last public lineup, but hide it immediately and
+   // prevent every form/payment sync from silently bringing it back.
+   const updated={...data,teamsPublished:false};
+   const saved=await env.FRIENDSGIVING_DB.prepare('UPDATE organizer_data SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?')
+    .bind(JSON.stringify(updated),revision).run();
+   if(!saved.meta.changes)return reply({error:'Changed elsewhere'},409);
+   return reply({revision:revision+1,isPublished:false,teams:safeTeams(data.teams)});
+  }
+  if(!Array.isArray(teams)||!teams.length||teams.length>32)return reply({error:'Create at least one team before publishing'},400);
   const ids=new Set(),assigned=new Set(),cleaned=[];
+  const form=await env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first();
+  if(!form)return reply({error:'Form responses unavailable'},503);
+  const eligibility=formEligible(data,JSON.parse(form.data));
+  const canonical=value=>eligibility.aliases.get(eligibleKey(value))||eligibleKey(value);
   // Captain names count as reserved players, even though they aren't duplicated in members.
   for(const team of teams){
    if(!team||typeof team.captain!=='string'||clean(team.captain).length>100)return reply({error:'Invalid team captain'},400);
-   const captain=nameKey(team.captain);
+   const captain=canonical(team.captain);
    if(captain){
     if(assigned.has(captain))return reply({error:'A captain cannot lead more than one team or appear twice'},400);
     assigned.add(captain);
@@ -51,25 +70,22 @@ export async function onRequestPost({request,env}){
    const members=[];
    for(const member of t.members){
     if(typeof member!=='string'||!clean(member)||clean(member).length>100)return reply({error:'Invalid member name'},400);
-    const name=clean(member),key=nameKey(name);
+    const name=cleanName(member)+(String(member).trim().endsWith('+1')?' +1':''),key=canonical(name);
     if(assigned.has(key))return reply({error:'A guest can only belong to one team: '+name},400);
     assigned.add(key);members.push(name);
    }
-   cleaned.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:clean(t.captain),members});
+   cleaned.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),members});
   }
-  const row=await env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first();
-  if(!row)return reply({error:'Planner unavailable'},503);
-  if(row.revision!==revision)return reply({error:'The teams were updated elsewhere. Refresh before saving.'},409);
-  const data=JSON.parse(row.content);
-  const form=await env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first();
-  if(!form)return reply({error:'Form response list unavailable'},503);
-  const eligible=new Set(formEligible(data,JSON.parse(form.data)).eligible.map(p=>eligibleKey(p.name)));
+  const eligible=new Set(eligibility.eligible.map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
    if(!eligible.has(eligibleKey(member)))return reply({error:'Only matched, paid and RSVP-confirmed form participants can be published: '+member},400);
   }
-  const next={...data,teams:cleaned};
+  // Reconcile potential companion pairs and balance immediately before publish.
+  const balanced=balanceTeams(cleaned,eligibility);
+  if(balanced.error)return reply({error:balanced.error},400);
+  const next={...data,teams:balanced.teams,teamsPublished:true};
   const saved=await env.FRIENDSGIVING_DB.prepare('UPDATE organizer_data SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(next),revision).run();
   if(!saved.meta.changes)return reply({error:'The teams changed. Refresh before saving.'},409);
-  return reply({revision:revision+1,teams:cleaned});
+  return reply({revision:revision+1,teams:balanced.teams,isPublished:true});
  }catch{return reply({error:'Unable to save teams'},500)}
 }
