@@ -1,0 +1,13 @@
+/* Organizer integrations, intentionally absent from the public home page. */
+.fg-connections{margin:18px 0 10px;display:grid;gap:14px;max-width:100%}
+.fg-connections .fg-source{min-width:0;max-width:100%;padding:17px 18px;border:1px solid #486e98;border-left:4px solid #ffd630;border-radius:9px;background:#10243d;color:#f0f6ff}
+.fg-connections h3{margin:0 0 10px;color:#ffd630;font:800 clamp(1.05rem,3.5vw,1.4rem)/1.2 Impact,'Arial Narrow',system-ui,sans-serif;text-transform:uppercase;letter-spacing:.025em}
+.fg-connections p{margin:8px 0;overflow-wrap:anywhere;line-height:1.5;font-size:.91rem;color:#e1ebf5}
+.fg-connections a{color:#ffdf48;text-decoration:underline}
+.fg-connections .fg-note{color:#b9cadc;font-size:.84rem}
+.fg-connections .fg-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.fg-connections button{padding:10px 13px;min-height:44px;border-radius:6px;border:1px solid #688bb1;background:#21476f;color:white;cursor:pointer}
+.fg-connections .fg-restricted{color:#ffe198;font-size:.8rem}
+#plannerHelp:has(.fg-connections),#pageSettings:has(.fg-connections),#teamsHelp:has(.fg-connections){width:min(95vw,780px);max-height:88dvh;overflow-y:auto}
+#sheetSyncPanel{margin:0!important;background:#10243d;border-left:4px solid #ffd630!important}
+@media(max-width:600px){.fg-connections .fg-source{padding:13px}.fg-connections .fg-actions{align-items:stretch}.fg-connections button{flex:1 1 auto}}
