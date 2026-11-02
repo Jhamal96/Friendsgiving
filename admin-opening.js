@@ -20,7 +20,9 @@ function reveal(){
  },1200);
 }
 function visualFallback(){
- if(finished)return;
+ // A preload failure may occur while the acknowledgment dialogs are still open.
+ // Never display the opener or fallback until the dialogs have finished.
+ if(!started||finished)return;
  wrap.classList.add('fg-video-error');
  fallbackTimer=window.setTimeout(reveal,1900);
 }
