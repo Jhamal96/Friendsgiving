@@ -1,3 +1,4 @@
+import {formEligible,nameKey as eligibleKey} from '../../_lib/team-eligibility.js';
 // Admin-side team management. The public endpoint never returns planner/payment details.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
@@ -60,9 +61,11 @@ export async function onRequestPost({request,env}){
   if(!row)return reply({error:'Planner unavailable'},503);
   if(row.revision!==revision)return reply({error:'The teams were updated elsewhere. Refresh before saving.'},409);
   const data=JSON.parse(row.content);
-  const confirmed=new Set(confirmedGuests(data).map(nameKey));
+  const form=await env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first();
+  if(!form)return reply({error:'Form response list unavailable'},503);
+  const eligible=new Set(formEligible(data,JSON.parse(form.data)).eligible.map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
-   if(!confirmed.has(nameKey(member)))return reply({error:'Only RSVP-confirmed guests can be assigned: '+member},400);
+   if(!eligible.has(eligibleKey(member)))return reply({error:'Only matched, paid and RSVP-confirmed form participants can be published: '+member},400);
   }
   const next={...data,teams:cleaned};
   const saved=await env.FRIENDSGIVING_DB.prepare('UPDATE organizer_data SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(next),revision).run();
