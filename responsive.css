@@ -1,0 +1,105 @@
+/* Friendsgiving adaptive layout: use the actual viewport, not a brittle user-agent guess. */
+:root{--fg-screen-h:100vh}
+html{max-width:100%;scroll-padding-top:78px;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{max-width:100%;overflow-x:clip}
+main,section,.card,.event,.guest,.team-card,.roster-card{min-width:0}
+img,video,svg{max-width:100%}
+img{height:auto}
+input,textarea,select{max-width:100%}
+a,button,summary{touch-action:manipulation}
+h1,h2,h3,p,.brand,.roster-name,.event,.team-card,.guest{overflow-wrap:anywhere}
+.guest-modal,.admin-pop,dialog{max-width:calc(100vw - 24px);max-height:calc(var(--fg-screen-h,100dvh) - 28px);overflow:auto;overscroll-behavior:contain}
+#fgLoader{height:var(--fg-screen-h,100dvh);height:100dvh;min-height:0;padding:0 env(safe-area-inset-right,0px) 0 env(safe-area-inset-left,0px);background:radial-gradient(ellipse at center,#0d223a 0%,#030912 68%)}
+#fgLoader video{display:block;width:100%;height:100%;max-height:100%;object-fit:contain;object-position:center;background:transparent}
+#fgLoader .skip{right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:10;min-height:44px;border-radius:9px;background:#06172de8;box-shadow:0 8px 30px #0009;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#fgLoader .skip:focus-visible{outline:3px solid #ffd630;outline-offset:3px}
+/* Guest page */
+body>header{min-width:0;gap:14px}
+body>header .brand{min-width:0}
+body>header nav{min-width:0}
+body>header nav a{white-space:nowrap}
+body>.hero{min-height:clamp(540px,78svh,800px)}
+body>.hero .hero-content{width:100%;min-width:0;margin-inline:auto}
+body>.hero .hero-content h1{overflow-wrap:normal}
+body>main .cards,body>main .timeline,body>main .teams-grid{min-width:0}
+body>main .status>div{min-width:0}
+body>main .status strong{overflow-wrap:anywhere}
+body>main .flyer-section img{max-width:100%;object-fit:contain}
+body>main .section-head{min-width:0}
+/* Organizer pages */
+.admin-top{min-width:0}
+.admin-top .menu-wrap{min-width:0}
+.admin-top .menu-list{max-width:calc(100vw - 30px)}
+.panel,.group,.guest,.team-card,.line,.grid,.section-row{min-width:0}
+.line input,.line textarea{min-width:0}
+#teamFields .member-entry>*{min-width:0}
+.bar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+@media(max-width:1024px){
+ body>header{padding-inline:5%}
+ body>.hero{padding-inline:5%;background-position:center}
+ body>main{padding-inline:5%}
+ body>main .timeline{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body>main .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body>main .status>div{padding:18px}
+ body>main .section-head{align-items:start}
+}
+@media(max-width:700px){
+ html{scroll-padding-top:130px}
+ body>header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 14px;padding:13px max(4%,env(safe-area-inset-left,0px)) 12px;position:relative}
+ body>header .brand{font-size:clamp(.63rem,2.8vw,.8rem);letter-spacing:.10em}
+ body>header .guest-settings-button{grid-column:2;grid-row:1;justify-self:end;min-width:44px;min-height:44px}
+ body>header nav{grid-column:1/-1;grid-row:2;display:flex;width:100%;gap:clamp(12px,4vw,25px);overflow-x:auto;padding:2px 0 8px;scrollbar-width:thin;overscroll-behavior-inline:contain}
+ body>header nav a{flex:0 0 auto;font-size:.85rem}
+ body>.hero{min-height:clamp(440px,72svh,670px);padding:58px 5% 102px}
+ body>.hero .hero-content h1{font-size:clamp(3.05rem,13.5vw,6.4rem);line-height:.9;margin:18px 0 22px;letter-spacing:-.03em}
+ body>.hero .lead{font-size:clamp(1rem,3.7vw,1.18rem);line-height:1.5}
+ body>.hero .actions{gap:12px;margin-top:26px}
+ body>.hero .actions .button{max-width:100%;padding:12px 16px;font-size:.77rem}
+ body>main{padding-inline:5%}
+ body>main .status{grid-template-columns:minmax(0,1fr);margin-top:-39px}
+ body>main .status>div{padding:13px 19px}
+ body>main section{padding-block:58px}
+ body>main .section-head{display:block;margin-bottom:24px}
+ body>main .section-head p{margin-top:16px;max-width:100%}
+ body>main .timeline,body>main .cards,body>main .teams-grid{grid-template-columns:minmax(0,1fr)}
+ body>main .event{padding:20px;min-height:0}
+ body>main .card,body>main .roster-card{padding:20px;min-height:0}
+ body>main .closing{margin:65px 0;padding:48px 18px}
+ body>main .foot{flex-direction:column;gap:7px}
+ body>main .teams-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+ body>main .teams-toolbar input{width:100%;min-width:0;font-size:16px}
+ .guest-modal,.admin-pop,dialog{width:min(94vw,540px);padding:20px;max-height:calc(var(--fg-screen-h,100dvh) - 24px)}
+ .admin-top{gap:10px}
+ .admin-top .menu-list{width:min(300px,calc(100vw - 28px))}
+ main{min-width:0}
+ main .line{flex-wrap:wrap}
+ main .line label{flex:1 1 min(180px,100%)}
+ main .line button{flex:0 0 auto}
+ main .section-row{gap:8px}
+ main .section-row .switch{min-width:0}
+ main .toolbar,main .controls{gap:9px}
+ main .grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
+ #teamFields .member-entry{display:flex;flex-wrap:wrap}
+ #teamFields .member-entry select{width:100%;flex:1 1 100%}
+ #teamFields .member-entry button{flex:1 1 auto}
+}
+@media(max-width:380px){
+ body>.hero .hero-content h1{font-size:clamp(2.8rem,13.2vw,4rem)}
+ body>.hero .actions{flex-direction:column;align-items:center}
+ body>.hero .actions .button{width:100%;justify-content:center}
+ .admin-top .menu-wrap summary{padding:8px 10px}
+ .admin-top .settings-button{min-width:44px}
+ main .controls button{flex:1 1 auto}
+ main .team-card{padding:16px}
+}
+@media (orientation:landscape) and (max-height:530px){
+ body>.hero{min-height:410px;padding-top:40px;padding-bottom:65px}
+ body>.hero .hero-content h1{font-size:clamp(3rem,10vh,5.3rem)}
+ body>main section{padding-block:42px}
+ #fgLoader .skip{bottom:calc(8px + env(safe-area-inset-bottom,0px));right:calc(12px + env(safe-area-inset-right,0px))}
+}
+@media(pointer:coarse){
+ body>header nav a{padding-block:7px}
+ .admin-top summary,.admin-top button,button,.button{min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
