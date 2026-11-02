@@ -1,3 +1,4 @@
+import {reconcileTeams} from '../_lib/team-eligibility.js';
 // Secure Forms response sync: only minimal participant/registration fields are accepted.
 // Email, telephone and dietary/allergy free text are deliberately never copied.
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -31,6 +32,7 @@ export async function onRequestPost({request,env}){
   const record={sourceSpreadsheet:sheetId,tab:'Form Responses 1',records:items,mode:'live_google_form_sync',lastImportedAt:new Date().toISOString()};
   const write=await env.FRIENDSGIVING_DB.prepare('UPDATE friendsgiving_form_responses SET data=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(record),existing.revision).run();
   if(!write.meta.changes)return json({error:'Concurrent sync; retry'},409);
-  return json({ok:true,processed:items.length,revision:existing.revision+1});
+  const teamRefresh=await reconcileTeams(env.FRIENDSGIVING_DB);
+  return json({ok:true,processed:items.length,revision:existing.revision+1,teamsAutoUpdated:teamRefresh.ok&&teamRefresh.changed,teamWarning:teamRefresh.ok?null:teamRefresh.error});
  }catch{return json({error:'Unable to process form responses'},500)}
 }
