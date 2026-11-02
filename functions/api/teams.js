@@ -19,7 +19,7 @@ export async function onRequestGet({request,env}){
   if(!row)return reply({hasPublishedTeams:false});
   const teams=publishedTeams(JSON.parse(row.content));
   // Do not reveal team names, captains, member names, or member counts here.
-  return reply({hasPublishedTeams:teams.some(t=>t.members.length>0)});
+  return reply({hasPublishedTeams:teams.some(t=>t.members.length>0||normalized(t.captain))});
  }catch{return reply({error:'Team lookup unavailable'},503)}
 }
 export async function onRequestPost({request,env}){
@@ -39,7 +39,7 @@ export async function onRequestPost({request,env}){
   let result=null;
   for(const team of teams){
    // Match exactly against a published player name. Never perform prefix or partial search.
-   if(!team.members.some(member=>typeof member==='string'&&normalized(member)===key))continue;
+   if(normalized(team.captain)!==key&&!team.members.some(member=>typeof member==='string'&&normalized(member)===key))continue;
    if(result)return reply({found:false}); // Ambiguous assignments: disclose nothing.
    result={found:true,team:team.name.trim(),captain:typeof team.captain==='string'&&team.captain.trim()?team.captain.trim():'To be announced'};
   }
