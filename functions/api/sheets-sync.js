@@ -38,7 +38,7 @@ export async function onRequestPost({request,env}){
   if(!row)return json({error:'Planner missing'},503);
   const data=JSON.parse(row.content);
   if(!Array.isArray(data.guests))return json({error:'Planner data invalid'},503);
-  const prior=data.sheetSync||{},baseline=prior.baseline||{};
+  const prior=data.sheetSync||{},baseline=prior.baseline||{},oldConflicts=new Set((prior.conflicts||[]).map(c=>nameKey(c.guest)+'::'+c.field));
   const known=new Map(data.guests.map((g,i)=>[nameKey(g?.[0]),i]).filter(([k])=>!!k));
   let cellChanges=0,added=0;
   const conflicts=[];
@@ -56,6 +56,7 @@ export async function onRequestPost({request,env}){
     if(base&&remote!==previous&&l===previous){local[i]=remote;cellChanges++;continue}
     if(!base&&l===''){local[i]=remote;cellChanges++;continue}
     if(base&&remote!==previous&&l!==previous){conflicts.push({guest:sheet[0],field:fields[i]});continue}
+    if(oldConflicts.has(key+'::'+fields[i])&&l!==remote){conflicts.push({guest:sheet[0],field:fields[i]});continue}
     // Website-only changes are retained until two-way write-back is configured.
    }
   }
