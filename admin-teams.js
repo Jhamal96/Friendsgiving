@@ -169,6 +169,28 @@ async function start(){
 }
 $('addTeam').addEventListener('click',()=>openEditor(null));
 $('randomizeTeams').addEventListener('click',randomizeTeams);
+// Keep an open organizer page aligned with Google Sheet and Form response changes.
+setInterval(async()=>{
+ if(document.hidden||dirty||saving||publishing||blocked||$('editTeam').open)return;
+ try{
+  const response=await fetch('/admin/api/team-draft',{cache:'no-store'});
+  if(!response.ok)return;
+  const result=await response.json();
+  if(!Array.isArray(result.teams)||!Array.isArray(result.guests)||!Number.isSafeInteger(result.revision))return;
+  if(dirty||saving||publishing||$('editTeam').open)return;
+  const previousRevision=draftRevision,previousGuests=JSON.stringify(guests);
+  draftRevision=result.revision;
+  guests=result.guests;
+  publishedBaseline=serial(result.publishedTeams||[]);
+  const info=$('teamEligibilityInfo');
+  if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
+  if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)){
+   teams=result.teams;render();refreshPublishButton();
+   status.textContent='✓ Team assignments refreshed from RSVP and payment changes. Review, then publish any new draft lineup.';
+  }
+ }catch{}
+},60000);
+
 save.addEventListener('click',async()=>{
  if(blocked||publishing)return;
  publishing=true;save.disabled=true;
