@@ -1,30 +1,81 @@
 (()=>{'use strict';
-const section=document.getElementById('teams'),root=document.getElementById('teamsGrid'),nav=document.getElementById('teamsNav'),search=document.getElementById('teamSearch'),notice=document.getElementById('teamsNotice');
-let teams=[];
-function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
-function draw(){
- const q=search.value.trim().toLocaleLowerCase('en-US'),visible=teams.filter(t=>[t.name,t.caption,t.captain,...t.members].some(v=>String(v||'').toLocaleLowerCase('en-US').includes(q)));
- root.replaceChildren();
- if(!visible.length){root.append(el('p','teams-empty',q?'No matching teams or squad members.':'Team announcements are coming soon.'));return}
- visible.forEach((t,i)=>{
-  const card=el('article','roster-card'),head=el('div','roster-heading');
-  head.append(el('span','roster-index','SQUAD / '+String(i+1).padStart(2,'0')));
-  head.append(el('h3','roster-name',t.name));card.append(head);
-  if(t.caption)card.append(el('p','roster-caption','“'+t.caption+'”'));
-  card.append(el('div','roster-captain','★ CAPTAIN: '+(t.captain||'To be announced')));
-  const title=el('p','roster-members-heading','TEAM MEMBERS · '+t.members.length);card.append(title);
-  const list=el('ul','roster-members');
-  if(!t.members.length)list.append(el('li','muted','Assignments coming soon'));
-  else t.members.forEach(m=>list.append(el('li','',m)));
-  card.append(list);root.append(card);
- });
- notice.textContent=visible.length+' '+(visible.length===1?'team':'teams')+' shown';
+// The browser receives only the response for an exact name; team rosters never load.
+const section=document.getElementById('teams');
+const form=document.getElementById('teamLookupForm');
+const root=document.getElementById('teamsGrid');
+const nav=document.getElementById('teamsNav');
+const input=document.getElementById('teamSearch');
+const notice=document.getElementById('teamsNotice');
+const submit=document.getElementById('teamLookupButton');
+if(!section||!form||!root||!input||!notice||!submit)return;
+let requestNumber=0,controller=null;
+function el(tag,className,value){
+ const node=document.createElement(tag);
+ if(className)node.className=className;
+ if(value!==undefined)node.textContent=value;
+ return node;
 }
-fetch('/api/teams',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Unable to load teams');return r.json()}).then(data=>{
- teams=Array.isArray(data.teams)?data.teams:[];
- if(!teams.length)return;
- section.hidden=section.dataset.adminHidden==='1';
- if(nav)nav.hidden=section.hidden;
- search.addEventListener('input',draw);draw();
-}).catch(()=>{section.hidden=true;if(nav)nav.hidden=true});
+function clearResult(){
+ requestNumber++;
+ if(controller){controller.abort();controller=null}
+ root.replaceChildren();
+ notice.textContent='';
+ submit.disabled=false;
+}
+input.addEventListener('input',clearResult);
+form.addEventListener('submit',async e=>{
+ e.preventDefault();
+ const name=input.value.normalize('NFKC').trim().replace(/\s+/g,' ');
+ clearResult();
+ if(name.length<2){
+  notice.textContent='Enter your full name to find your team.';
+  input.focus();
+  return;
+ }
+ const mine=++requestNumber;
+ controller=new AbortController();
+ submit.disabled=true;
+ notice.textContent='Checking your team assignment…';
+ try{
+  const response=await fetch('/api/teams',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({name}),
+   signal:controller.signal,
+   cache:'no-store'
+  });
+  const result=await response.json().catch(()=>({}));
+  if(mine!==requestNumber)return;
+  if(!response.ok)throw Error(result.error||'Unable to find your team. Try again.');
+  if(!result.found){
+   notice.textContent='No published team found for that name. Check the spelling or contact the organizers.';
+   return;
+  }
+  const card=el('article','roster-card team-lookup-card');
+  const header=el('div','roster-heading');
+  header.append(el('span','roster-index','YOUR ASSIGNMENT'));
+  header.append(el('h3','roster-name',result.team));
+  card.append(header);
+  card.append(el('p','roster-captain','★ TEAM CAPTAIN: '+result.captain));
+  root.replaceChildren(card);
+  notice.textContent='Your team assignment';
+ }catch(err){
+  if(mine!==requestNumber||err.name==='AbortError')return;
+  notice.textContent=err.message||'Please try again.';
+ }finally{
+  if(mine===requestNumber){submit.disabled=false;controller=null}
+ }
+});
+fetch('/api/teams',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{
+ if(section.dataset.adminHidden==='1')return;
+ section.hidden=false;
+ if(nav)nav.hidden=false;
+ if(data.hasPublishedTeams===false)notice.textContent='Team assignments have not been published yet.';
+}).catch(()=>{
+ // Keep the input available if the service is temporarily offline.
+ if(section.dataset.adminHidden!=='1'){
+  section.hidden=false;if(nav)nav.hidden=false;
+  notice.textContent='Team lookups are temporarily unavailable.';
+ }
+});
 })();
