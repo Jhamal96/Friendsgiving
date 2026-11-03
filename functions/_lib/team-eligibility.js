@@ -1,7 +1,7 @@
 // Paid RSVP form matching. Use first names in team rosters and actual first
 // names of companions; never make up "+1" placeholders.
 export const cleanName=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').replace(/\s+/g,' ').trim().slice(0,100);
-export const firstName=value=>cleanName(value).split(' ')[0]||'';
+export const firstName=value=>{const w=cleanName(value).split(' ')[0]||'';return w?w.charAt(0).toUpperCase()+w.slice(1).toLowerCase():''};
 export const nameKey=value=>cleanName(value).toLowerCase();
 const firstKey=value=>nameKey(firstName(value));
 const words=s=>nameKey(s).split(' ').filter(Boolean);
