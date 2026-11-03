@@ -301,22 +301,23 @@ export function balanceTeams(input,eligibility){
  for(const g of eligibility.groups||[]){
   const base=Array.isArray(g.companions)?g.companions:g.plusOne?[g.plusOne]:[];
   const sponsorKey=canonical(g.primary);
-  // Do not place an unpaid sponsor on a team, but their independently paid
-  // plus-one may still participate when the sponsor confirmed their RSVP.
-  const people=allowed.has(sponsorKey)?[g.primary]:[];
+  // Guest List + verified Form matching is the allowlist. A duplicate name
+  // must never drop otherwise eligible members of the same registration.
+  // Captains remain reserved on their own teams even if listed as companions.
   let homeCaptain=captainOwner.get(sponsorKey);
-  for(const companion of base){
-   const key=canonical(companion);
-   if(!allowed.has(key))continue;
+  const candidates=[...(allowed.has(sponsorKey)?[g.primary]:[]),...base];
+  const names=[],keys=[],local=new Set();
+  for(const name of candidates){
+   const key=canonical(name);
+   if(!key||!allowed.has(key)||local.has(key)||used.has(key))continue;
    const owner=captainOwner.get(key);
    if(owner!==undefined&&homeCaptain!==undefined&&owner!==homeCaptain)continue;
    if(owner!==undefined)homeCaptain=owner;
-   people.push(companion);
+   local.add(key);names.push(name);keys.push(key);
   }
-  const ids=people.map(canonical);
-  if(!ids.length||ids.some(k=>!k||used.has(k)))continue;
-  ids.forEach(k=>used.add(k));
-  groups.push({names:people,keys:ids,sponsorCaptain:captainOwner.get(sponsorKey)});
+  if(!names.length)continue;
+  keys.forEach(k=>used.add(k));
+  groups.push({names,keys,sponsorCaptain:captainOwner.get(sponsorKey)});
  }
  const claimed=new Set(),buckets=teams.map(()=>[]),sizes=teams.map(t=>canonical(t.captain)?1:0);
  for(const group of groups){
