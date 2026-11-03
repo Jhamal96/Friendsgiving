@@ -52,6 +52,10 @@ form.addEventListener('submit',async e=>{
    return;
   }
   const card=el('article','roster-card team-lookup-card');
+  // Only recognized team names can select a color class. Unknown teams keep
+  // the original neutral style, with no styles coming from user input.
+  const teamColor=String(result.team||'').trim().toLowerCase();
+  if(teamColor==='yellow'||teamColor==='blue')card.classList.add('team-lookup-'+teamColor);
   const header=el('div','roster-heading');
   header.append(el('span','roster-index','YOUR ASSIGNMENT'));
   header.append(el('h3','roster-name',result.team));
