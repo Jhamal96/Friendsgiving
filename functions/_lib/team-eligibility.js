@@ -87,9 +87,13 @@ export function formEligible(organizer,form){
  const baseline=organizer?.sheetSync?.status==='sheet_to_site_active'?organizer.sheetSync.baseline:null;
  const activeSource=baseline&&typeof baseline==='object'&&!Array.isArray(baseline)
   ?new Set(Object.keys(baseline).map(k=>String(k).trim().toLocaleLowerCase('en-US'))):null;
+ const removedGuests=organizer?.removedGuests&&typeof organizer.removedGuests==='object'
+  ?organizer.removedGuests:{};
  const activeRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>{
   if(!Array.isArray(r)||!nameKey(r[0]))return false;
-  return !activeSource||activeSource.has(String(r[0]).trim().toLocaleLowerCase('en-US'));
+  const key=String(r[0]).trim().toLocaleLowerCase('en-US');
+  if(Object.hasOwn(removedGuests,key))return false;
+  return !activeSource||activeSource.has(key);
  });
  // An explicit "<inviter> +1" is payment for one companion, not an
  // independent main participant or an unlimited number of companions.
