@@ -282,7 +282,7 @@ export function formEligible(organizer,form){
  };
 }
 
-export function balanceTeams(input,eligibility){
+export function balanceTeams(input,eligibility,squadRoles={}){
  if(!Array.isArray(input)||!input.length)return {teams:input||[],changed:false,assigned:0,removed:0,added:0,moved:0};
  const teams=input.map(t=>({...t,captain:firstName(t.captain),members:Array.isArray(t.members)?[...t.members]:[]}));
  const alias=eligibility.aliases;
@@ -299,9 +299,12 @@ export function balanceTeams(input,eligibility){
  // Every verified guest AND every individually paid/confirmed plus-one is
  // one independent player in team randomization. Their shared registration
  // determines eligibility, not which team they must be on.
- const allowed=new Set(eligibility.eligible.map(p=>canonical(p.name)));
+ const excludedRoles=squadRoles&&typeof squadRoles==='object'?squadRoles:{};
+ const playing=p=>!Object.hasOwn(excludedRoles,firstKey(p.name));
+ const allowed=new Set(eligibility.eligible.filter(playing).map(p=>canonical(p.name)));
  const groups=[],used=new Set();
  for(const person of eligibility.eligible||[]){
+  if(!playing(person))continue;
   const key=canonical(person.name);
   if(!key||!allowed.has(key)||used.has(key))continue;
   used.add(key);
@@ -371,9 +374,10 @@ export async function reconcileTeams(db){
   if(!orgRow||!formRow||!draftRow)return {ok:false,error:'Team sources unavailable'};
   const organizer=JSON.parse(orgRow.content),form=JSON.parse(formRow.data);
   const eligibility=formEligible(organizer,form);
-  const privateResult=balanceTeams(JSON.parse(draftRow.content),eligibility);
+  const roles=organizer.squadRoles||{};
+  const privateResult=balanceTeams(JSON.parse(draftRow.content),eligibility,roles);
   const isPublished=organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0);
-  const publicResult=isPublished?balanceTeams(Array.isArray(organizer.teams)?organizer.teams:[],eligibility):{teams:organizer.teams||[],changed:false};
+  const publicResult=isPublished?balanceTeams(Array.isArray(organizer.teams)?organizer.teams:[],eligibility,roles):{teams:organizer.teams||[],changed:false};
   if(privateResult.error||publicResult.error)return {ok:false,error:privateResult.error||publicResult.error,eligible:eligibility.eligible.length};
   if(!privateResult.changed&&!publicResult.changed)return {ok:true,changed:false,eligible:eligibility.eligible.length,review:eligibility.reviewCount,privateResult,publicResult};
   if(privateResult.changed){
