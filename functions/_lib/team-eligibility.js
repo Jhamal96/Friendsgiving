@@ -73,7 +73,7 @@ export function formEligible(organizer,form){
     aliases.set(nameKey(raw),k);aliases.set(k,k);
    }
   }
-  groups.push({primary:p.first,alias:p.sheetName,companions});
+  groups.push({primary:p.first,alias:p.sheetName,sourceRow:p.sourceRow,companions});
  }
  return {eligible,groups,aliases,matched:matched.map(m=>({sourceRow:m.sourceRow,guest:m.sheetName,first:m.first,method:m.method})),reviewRows:review,reviewCount:review.length,reasonCounts:review.reduce((o,v)=>(o[v.reason]=(o[v.reason]||0)+1,o),{}),sourceCount:forms.length};
 }
