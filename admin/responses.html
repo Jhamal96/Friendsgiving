@@ -58,9 +58,9 @@ button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #ff
 <p id="responseStatus" role="status" aria-live="polite">Loading response matches…</p>
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0"><button id="reloadMatches" type="button">Recheck synced data</button><button id="viewSyncUpdates" type="button" title="Review source changes and team assignment status">View team update status</button><a style="align-self:center" href="https://docs.google.com/spreadsheets/d/15KhO9_BuCQrJXeTzr4hAyNrqDocAbZsObu_FsWAjGuk/edit" target="_blank" rel="noopener noreferrer">Open Guest List</a><a style="align-self:center" href="https://docs.google.com/spreadsheets/d/1JRPCoLs2pB44-WyiGvACL0nnDVeiyj_NrgHS8cYrluY/edit?usp=drivesdk" target="_blank" rel="noopener noreferrer">Open original responses Sheet</a></div>
 <div class="groups">
-<section class="group"><h2>Ready for teams</h2><ul id="matchedNames"></ul></section>
+<section class="group"><h2>Matched Form responses</h2><p class="intro">This section reviews Form-to-Guest List name matching. A Form is not required to join a team; the Guest List determines eligibility.</p><ul id="matchedNames"></ul></section>
 <section class="group"><h2>Needs review</h2><ul id="reviewRows"></ul></section>
-<section class="group"><h2>Plus-one names</h2><p class="intro">Each named companion needs confirmed payment and a Yes RSVP from their inviter. A paid inviter +1 entry covers one named companion. Unpaid or unmatched companions stay in review.</p><ul id="plusOneMatches"></ul></section>
+<section class="group"><h2>Plus-one names</h2><p class="intro">Named plus-ones join the team pool only when their own active Guest List entry shows RSVP = Yes and Paid = Yes, without an asterisk (*). A Form response helps identify them but does not determine eligibility. Unconfirmed companions remain for review.</p><ul id="plusOneMatches"></ul></section>
 </div>
 <dialog class="source-updates" id="syncChangesDialog" aria-labelledby="syncChangesTitle" aria-describedby="syncChangesSummary">
  <div class="source-updates-heading"><span class="source-update-kicker">◆ FRIENDSGIVING / SYNC REPORT</span><h2 id="syncChangesTitle">Form &amp; Guest List updates</h2><p id="syncChangesSummary">Checking for changes…</p></div>
