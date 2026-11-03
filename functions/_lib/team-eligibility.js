@@ -137,7 +137,9 @@ export function formEligible(organizer,form){
  }
  for(const p of plan){
   const person=p.person,hit=p.claimed;
-  const common={sourceRow:person.sourceRow};
+  const bits=nameTokens(person.rawName);
+  const formHint=firstName(person.name)+(bits.length>=2?' '+bits.at(-1)[0].toUpperCase()+'.':'');
+  const common={sourceRow:person.sourceRow,formHint};
   if(!hit){
    const reason=p.ambiguousInitial||p.best.length>1?'ambiguous-name':
     p.best.length===1&&usedSheet.has(p.best[0].index)?'duplicate-match':
