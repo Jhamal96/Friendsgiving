@@ -25,8 +25,22 @@ async function saveChanges(){
 }
 function field(label,value,onchange){const wrap=document.createElement('label');wrap.textContent=label;const inp=document.createElement('input');inp.type='text';inp.maxLength=500;inp.value=value||'';inp.addEventListener('input',()=>{onchange(inp.value);changed()});wrap.append(inp);return wrap}
 function button(text,fn,cls){const b=document.createElement('button');b.type='button';b.textContent=text;if(cls)b.className=cls;b.addEventListener('click',fn);return b}
-function renderTabs(){let root=$('#tabs');root.replaceChildren();[['guests','Guests & payments'],...defs.map((g,i)=>[String(i),g.name])].forEach(([key,label])=>{let b=button(label,()=>{view=key;renderTabs();renderView()});b.setAttribute('aria-pressed',String(view===key));root.append(b)})}
-function renderView(){$('#guestSection').hidden=view!=='guests';$('#lists').hidden=view==='guests';if(view==='guests')renderGuests();else renderList(Number(view))}
+function renderTabs(){
+ const root=$('#tabs');root.replaceChildren();
+ const awaiting=data?guestEntries().entries.filter(({row})=>row[0].trim()&&!rsvpConfirmed(row)).length:0;
+ [['guests','Guests & payments'],['not-rsvp','Not RSVP’d ('+awaiting+')'],...defs.map((g,i)=>[String(i),g.name])].forEach(([key,label])=>{
+  const b=button(label,()=>{view=key;renderTabs();renderView()});
+  b.setAttribute('aria-pressed',String(view===key));
+  if(key==='not-rsvp')b.title='Guests with No or missing RSVP confirmation';
+  root.append(b);
+ });
+}
+function renderView(){
+ const guestTab=view==='guests'||view==='not-rsvp';
+ $('#guestSection').hidden=!guestTab;
+ $('#lists').hidden=guestTab;
+ if(guestTab)renderGuests();else renderList(Number(view));
+}
 function renderList(gi){const root=$('#lists');root.replaceChildren();const g=defs[gi],section=document.createElement('div');section.className='group';const title=document.createElement('h2');title.textContent=g.name;section.append(title);const desc=document.createElement('p');desc.className='muted';desc.textContent='Mark items complete as you go. Changes save automatically.';section.append(desc);data.planning.forEach((row,ri)=>{if(!g.cols.some(c=>row[c]))return;const key=gi+':'+ri,line=document.createElement('div');line.className='line'+(data.completion[key]?' done':'');g.cols.forEach((c,i)=>line.append(field(g.labels[i],row[c],v=>row[c]=v)));const done=button(data.completion[key]?'✓ Completed':'Mark complete',()=>{data.completion[key]=!data.completion[key];changed();renderList(gi)},'complete');done.setAttribute('aria-pressed',String(!!data.completion[key]));line.append(done,button('Remove',()=>{g.cols.forEach(c=>row[c]='');delete data.completion[key];changed();renderList(gi)},'danger'));section.append(line)});section.append(button('+ Add '+g.name,()=>{const row=Array(9).fill('');data.planning.push(row);const ri=data.planning.length-1,line=document.createElement('div');line.className='line';g.cols.forEach((c,i)=>line.append(field(g.labels[i],'',v=>row[c]=v)));line.append(button('Remove',()=>{line.remove();g.cols.forEach(c=>row[c]='');changed()},'danger'));section.insertBefore(line,section.lastChild);line.querySelector('input').focus();changed()}));root.append(section)}
 // The Google Guest List is the active source of truth. Display a name once,
 // even when a duplicate copy exists in historical organizer data. Keep those
@@ -58,14 +72,103 @@ function guestEntries(){
  }
  return {entries,duplicateCount,conflicts};
 }
+function rsvpConfirmed(row){
+ const status=String(row?.[3]||'').trim().toLowerCase();
+ return ['yes','confirmed','attending','true','1'].includes(status);
+}
+function rsvpStatus(row){
+ const status=String(row?.[3]||'').trim().toLowerCase();
+ if(rsvpConfirmed(row))return 'Confirmed';
+ if(!status)return 'Awaiting response';
+ if(['no','declined','not attending','false','0'].includes(status))return 'RSVP: No';
+ return 'Not confirmed: '+String(row[3]).trim().slice(0,45);
+}
 function pay(row){const p=(row[4]||'').trim().toLowerCase(),amount=(row[2]||'').trim().toLowerCase();if(p==='yes'||p==='paid')return 'paid';if(p==='no'||p==='unpaid')return 'unpaid';if(amount==='waived'||p==='waived')return 'waived';return 'unknown'}
 function updatePaidTotal(){const el=$('#paidTotal');if(!el||!data)return;let cents=0,missing=0;for(const {row} of guestEntries().entries){if(!row[0].trim()||pay(row)!=='paid')continue;const raw=(row[2]||'').trim().replace(/^[$]/, '').replace(/,/g,'');if(!/^[0-9]+(?:[.][0-9]{1,2})?$/.test(raw)){missing++;continue}const [whole,dec='']=raw.split('.');const n=Number(whole)*100+Number(dec.padEnd(2,'0'));if(!Number.isSafeInteger(n)||!Number.isSafeInteger(cents+n)){missing++;continue}cents+=n}el.textContent='Total marked paid: '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100)+(missing?' · '+missing+' paid '+(missing===1?'guest has':'guests have')+' no valid amount':'')} 
 function editGuest(index){const isNew=index===null, draft=isNew?Array(7).fill(''):data.guests[index].slice();const dialog=document.createElement('dialog');dialog.style.cssText='width:min(90vw,600px);max-height:85vh;overflow:auto;background:#10233c;color:white;border:1px solid #6683a4;border-radius:12px;padding:22px';const title=document.createElement('h2');title.textContent=isNew?'Add squad member':'Edit squad member';dialog.append(title);const grid=document.createElement('div');grid.className='grid';draft.forEach((v,i)=>{const label=document.createElement('label');label.textContent=guestLabels[i];const input=document.createElement('input');input.type='text';input.maxLength=500;input.value=v;input.addEventListener('input',()=>{draft[i]=input.value});label.append(input);grid.append(label)});dialog.append(grid);const error=document.createElement('p');error.setAttribute('role','status');dialog.append(error);const actions=document.createElement('div');actions.className='guest-actions';actions.append(button('Save details',()=>{if((isNew||data.guests[index][0].trim())&&!draft[0].trim()){error.textContent='Enter a guest name.';return}const newKey=guestKey(draft[0]),oldKey=isNew?'':guestKey(data.guests[index][0]);
  if(newKey&&(isNew||newKey!==oldKey)&&data.guests.some((row,i)=>i!==index&&guestKey(row[0])===newKey)){
   error.textContent='That guest is already in the Guest List. Edit the existing entry instead of creating a duplicate.';return
  }
- if(isNew)data.guests.push(draft);else data.guests[index]=draft;filter='all';changed();dialog.close();dialog.remove();renderGuests()},'primary'),button('Cancel',()=>{dialog.close();dialog.remove()}));dialog.append(actions);dialog.addEventListener('cancel',()=>dialog.remove());document.body.append(dialog);dialog.showModal();grid.querySelector('input').focus()}
-function renderGuests(){updatePaidTotal();const root=$('#guests'),totals=$('#totalEntries');root.replaceChildren();totals.replaceChildren();let counts={all:0,paid:0,unpaid:0,unknown:0,waived:0};const {entries,duplicateCount,conflicts}=guestEntries();entries.forEach(({row})=>{if(!row[0].trim())return;counts.all++;counts[pay(row)]++});$('#counts').textContent='Guests: '+counts.all+' · Paid: '+counts.paid+' · Unpaid: '+counts.unpaid+' · Unknown: '+counts.unknown+' · Waived: '+counts.waived+(duplicateCount?' · '+duplicateCount+' duplicate Guest List '+(duplicateCount===1?'entry':'entries')+' hidden (original records retained)':'')+(conflicts?' · '+conflicts+' conflicting copies need source review':'');const fs=$('#filters');fs.replaceChildren();[['all','All'],['paid','Paid'],['unpaid','Unpaid'],['unknown','Unknown'],['waived','Waived']].forEach(([k,label])=>{let b=button(label+' ('+counts[k]+')',()=>{filter=k;renderGuests()});b.setAttribute('aria-pressed',String(filter===k));fs.append(b)});let shown=0;entries.forEach(({row,index:i})=>{const isTotal=!row[0].trim()&&row.some(Boolean),p=pay(row);if(!isTotal&&filter!=='all'&&filter!==p)return;const card=document.createElement('article');card.className='guest';const heading=document.createElement('h3');heading.textContent=row[0]||'Sheet total / unnamed entry';const badge=document.createElement('span');badge.className='badge '+p;badge.textContent=isTotal?'Sheet entry':({paid:'Paid',unpaid:'Unpaid',unknown:'Unknown',waived:'Waived'}[p]);heading.append(' ',badge);card.append(heading);const grid=document.createElement('div');grid.className='grid';const fields=isTotal?[[2,'Original sheet total']]:[[2,'Amount'],[3,'RSVP'],[5,'Paid via'],[6,'Shirt size']];fields.forEach(([j,label])=>{const item=document.createElement('div');item.style.cssText='padding:8px 0;color:#dce8f5';const caption=document.createElement('small');caption.textContent=label+': ';const value=document.createElement('strong');value.textContent=row[j]||'Not provided';item.append(caption,value);grid.append(item)});card.append(grid);const acts=document.createElement('div');acts.className='guest-actions';if(!isTotal){acts.append(button('Edit details',()=>editGuest(i)),button('Mark paid',()=>{row[4]='Yes';changed();renderGuests()},'primary'),button('Mark unpaid',()=>{row[4]='No';changed();renderGuests()}),button('Clear payment status',()=>{row[4]='';changed();renderGuests()}));}else{acts.append(button('Edit total',()=>editGuest(i)))}acts.append(button('Remove entry',()=>{if(!confirm('Remove this entry?'))return;data.guests.splice(i,1);changed();renderGuests()},'danger'));card.append(acts);(isTotal?totals:root).append(card);if(!isTotal)shown++});$('#sheetTotal').hidden=!totals.children.length;if(!shown){const p=document.createElement('p');p.textContent='No guests in this view.';root.append(p)}}
+ if(isNew)data.guests.push(draft);else data.guests[index]=draft;filter='all';changed();dialog.close();dialog.remove();renderTabs();renderGuests()},'primary'),button('Cancel',()=>{dialog.close();dialog.remove()}));dialog.append(actions);dialog.addEventListener('cancel',()=>dialog.remove());document.body.append(dialog);dialog.showModal();grid.querySelector('input').focus()}
+function renderGuests(){
+ updatePaidTotal();
+ const notRsvp=view==='not-rsvp',root=$('#guests'),totals=$('#totalEntries');
+ root.replaceChildren();totals.replaceChildren();
+ $('#guestSectionTitle').textContent=notRsvp?'Not RSVP’d':'Guests & payments';
+ $('#guestSectionDescription').textContent=notRsvp
+  ?'Guests whose Google Guest List RSVP is marked No or has no confirmed response. Review their payment status, edit details, or confirm their RSVP. Website edits autosave to Cloudflare, not Google Sheets.'
+  :'Mark payments, check RSVPs, and manage guest details. Blank payment statuses are shown as unknown.';
+ $('#paidTotal').hidden=notRsvp;
+ $('#filters').hidden=notRsvp;
+ $('#addGuestToolbar').hidden=notRsvp;
+ $('#notRsvpInfo').hidden=!notRsvp;
+ const {entries,duplicateCount,conflicts}=guestEntries();
+ let counts={all:0,paid:0,unpaid:0,unknown:0,waived:0};
+ const awaiting=entries.filter(({row})=>row[0].trim()&&!rsvpConfirmed(row));
+ const noCount=awaiting.filter(({row})=>String(row[3]||'').trim().toLowerCase()==='no').length;
+ const blankCount=awaiting.filter(({row})=>!String(row[3]||'').trim()).length;
+ const otherCount=awaiting.length-noCount-blankCount;
+ entries.forEach(({row})=>{if(!row[0].trim())return;counts.all++;counts[pay(row)]++});
+ $('#counts').textContent=notRsvp
+  ?'Not RSVP’d: '+awaiting.length+' · Marked No: '+noCount+' · No response: '+blankCount+(otherCount?' · Other unconfirmed: '+otherCount:'')
+  :'Guests: '+counts.all+' · Paid: '+counts.paid+' · Unpaid: '+counts.unpaid+' · Unknown: '+counts.unknown+' · Waived: '+counts.waived+
+    (duplicateCount?' · '+duplicateCount+' duplicate Guest List '+(duplicateCount===1?'entry':'entries')+' hidden (original records retained)':'')+
+    (conflicts?' · '+conflicts+' conflicting copies need source review':'');
+ const fs=$('#filters');fs.replaceChildren();
+ [['all','All'],['paid','Paid'],['unpaid','Unpaid'],['unknown','Unknown'],['waived','Waived']].forEach(([key,label])=>{
+  const b=button(label+' ('+counts[key]+')',()=>{filter=key;renderGuests()});
+  b.setAttribute('aria-pressed',String(filter===key));fs.append(b);
+ });
+ let shown=0;
+ entries.forEach(({row,index:i})=>{
+  const isTotal=!row[0].trim()&&row.some(Boolean),payment=pay(row);
+  if(notRsvp&&(!row[0].trim()||rsvpConfirmed(row)))return;
+  if(!notRsvp&&!isTotal&&filter!=='all'&&filter!==payment)return;
+  const card=document.createElement('article');card.className='guest';
+  const heading=document.createElement('h3');heading.textContent=row[0]||'Sheet total / unnamed entry';
+  const badge=document.createElement('span');
+  badge.className='badge '+(notRsvp?'rsvp-pending':payment);
+  badge.textContent=notRsvp?rsvpStatus(row):isTotal?'Sheet entry':({paid:'Paid',unpaid:'Unpaid',unknown:'Unknown',waived:'Waived'}[payment]);
+  heading.append(' ',badge);card.append(heading);
+  const grid=document.createElement('div');grid.className='grid';
+  const fields=isTotal?[[2,'Original sheet total']]:notRsvp
+   ?[[3,'RSVP'],[4,'Paid'],[2,'Amount'],[5,'Paid via']]
+   :[[2,'Amount'],[3,'RSVP'],[5,'Paid via'],[6,'Shirt size']];
+  fields.forEach(([j,label])=>{
+   const item=document.createElement('div');item.style.cssText='padding:8px 0;color:#dce8f5';
+   const caption=document.createElement('small');caption.textContent=label+': ';
+   const value=document.createElement('strong');value.textContent=row[j]||'Not provided';
+   item.append(caption,value);grid.append(item);
+  });card.append(grid);
+  const acts=document.createElement('div');acts.className='guest-actions';
+  if(isTotal)acts.append(button('Edit total',()=>editGuest(i)));
+  else if(notRsvp){
+   acts.append(button('Confirm RSVP',()=>{
+    row[3]='Yes';changed();renderTabs();renderGuests();
+   },'primary'),button('Edit details',()=>editGuest(i)));
+  }else{
+   acts.append(
+    button('Edit details',()=>editGuest(i)),
+    button('Mark paid',()=>{row[4]='Yes';changed();renderGuests()},'primary'),
+    button('Mark unpaid',()=>{row[4]='No';changed();renderGuests()}),
+    button('Clear payment status',()=>{row[4]='';changed();renderGuests()})
+   );
+  }
+  if(!notRsvp)acts.append(button('Remove entry',()=>{
+   if(!confirm('Remove this entry?'))return;
+   data.guests.splice(i,1);changed();renderTabs();renderGuests();
+  },'danger'));
+  card.append(acts);
+  (isTotal?totals:root).append(card);
+  if(!isTotal)shown++;
+ });
+ $('#sheetTotal').hidden=notRsvp||!totals.children.length;
+ if(!shown){
+  const p=document.createElement('p');p.className='muted';
+  p.textContent=notRsvp?'Everyone on the Guest List has a confirmed RSVP.':'No guests in this view.';
+  root.append(p);
+ }
+}
 async function start(){try{const r=await fetch('/admin/api/planner',{cache:'no-store'});if(!r.ok)throw Error('Unable to load planner. Please refresh.');const out=await r.json();data=out.data;rev=out.revision;if(!data||!Array.isArray(data.planning)||!Array.isArray(data.guests))throw Error('Planner data unavailable.');data.completion=data.completion||{};renderTabs();renderView();$('#save').disabled=false;$('#notice').textContent='Autosave on · Guest, payment and planning edits save to Cloudflare. They do not write back to Google Sheets.'}catch(e){$('#notice').textContent=e.message}}
 async function refreshSheetSyncStatus(){
  const el=$('#sheetSyncStatus');if(!el)return;
@@ -81,6 +184,21 @@ async function refreshSheetSyncStatus(){
   }
  }catch{el.textContent='Initial snapshot imported; automatic synchronization status is temporarily unavailable.'}
 }
+// Keep the not-RSVP list aligned with Google Sheet updates and other admins.
+// Never overwrite unsaved local edits or an open guest-editing dialog.
+setInterval(async()=>{
+ if(document.hidden||dirty||saving||blocked||!data||document.querySelector('dialog[open]'))return;
+ try{
+  const response=await fetch('/admin/api/planner',{cache:'no-store'});
+  if(!response.ok)return;
+  const result=await response.json();
+  if(!Number.isSafeInteger(result.revision)||result.revision===rev||!Array.isArray(result.data?.guests)||!Array.isArray(result.data?.planning))return;
+  if(dirty||saving||blocked)return;
+  data=result.data;rev=result.revision;data.completion=data.completion||{};
+  renderTabs();renderView();
+  status.textContent='✓ Guest List refreshed from cloud';
+ }catch{}
+},60000);
 const checkSync=$('#checkSheetSync');if(checkSync)checkSync.addEventListener('click',refreshSheetSyncStatus);
 refreshSheetSyncStatus();
 $('#addGuest').addEventListener('click',()=>{if(data)editGuest(null)});
