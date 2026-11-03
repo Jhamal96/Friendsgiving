@@ -43,7 +43,6 @@ function input(label,value,limit,change){const l=el('label','edit-label',label),
 function cleanName(name){return String(name||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').replace(/\s+/g,' ').trim()}
 function nameKey(name){const s=String(name||'').trim(),plus=/\+\s*1\s*$/.test(s);return cleanName(plus?s.replace(/\+\s*1\s*$/,''):s).toLowerCase()+(plus?' +1':'')}
 function canonical(name){const k=nameKey(name);const group=guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k);return group?nameKey(group.primary):k}
-function groupFor(name){const k=nameKey(name);return guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k||(Array.isArray(g.companions)&&g.companions.some(n=>nameKey(n)===k)))}
 function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=nameKey(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
 function captainNames(){
  const names=new Map();
@@ -55,31 +54,32 @@ function randomizeTeams(){
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
  const captains=captainNames();
  if(captains.error){status.textContent='⚠ '+captains.error;return}
- if(!guests.length){status.textContent='No matched paid and RSVP-confirmed form names are available.';return}
- if(teams.some(t=>t.members.length)&&!confirm('Randomize all eligible form participants? Captains stay on their own teams, and each +1 stays with the person who brought them. This replaces private draft assignments.'))return;
- const allowedNames=new Set(guests.map(nameKey));
- const groups=guestGroups.length?guestGroups.map(g=>({...g})):[...new Set(guests)].map(g=>({primary:g,alias:g,companions:[]}));
- const captainOwner=new Map();
- teams.forEach((t,i)=>{const k=canonical(t.captain);if(k)captainOwner.set(k,i)});
- const shuffled=groups.slice();
- for(let i=shuffled.length-1;i>0;i--){const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]}
- const next=teams.map(()=>[]),sizes=teams.map(t=>canonical(t.captain)?1:0),used=new Set();
- for(const group of shuffled){
-  const key=canonical(group.primary);
-  if(!key||used.has(key))continue;
-  const members=[group.primary,...(Array.isArray(group.companions)?group.companions:[])].filter(n=>allowedNames.has(nameKey(n)));
-  const owner=captainOwner.get(key);
-  const index=owner!==undefined?owner:sizes.indexOf(Math.min(...sizes));
-  for(const name of members){
-   const id=nameKey(name);
-   if(!id||used.has(id)||captains.names.has(canonical(name)))continue;
-   next[index].push(name);sizes[index]++;used.add(id);
-  }
-  if(allowedNames.has(nameKey(group.primary)))used.add(key);
+ if(!guests.length){status.textContent='No eligible paid players or plus-ones are available.';return}
+ if(teams.some(t=>t.members.length)&&!confirm('Randomize all eligible players, including each paid and RSVP-confirmed plus-one independently? Captains stay with their teams. This replaces the private draft assignments, but does not publish them automatically.'))return;
+ // One random slot per verified participant. A paid +1 is a named player,
+ // and can land on a different team from the person who registered them.
+ const eligible=new Map();
+ for(const name of guests){
+  const key=canonical(name);
+  if(!key||captains.names.has(key)||eligible.has(key))continue;
+  eligible.set(key,name);
+ }
+ const shuffled=[...eligible.values()];
+ // Fisher-Yates: uniform shuffle using cryptographically secure indices.
+ for(let i=shuffled.length-1;i>0;i--){
+  const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
+ }
+ const next=teams.map(()=>[]);
+ const sizes=teams.map(t=>canonical(t.captain)?1:0);
+ for(const name of shuffled){
+  const min=Math.min(...sizes);
+  const available=sizes.map((size,i)=>size===min?i:-1).filter(i=>i>=0);
+  const target=available[randomIndex(available.length)];
+  next[target].push(name);sizes[target]++;
  }
  teams.forEach((team,i)=>{team.members=next[i]});
  markDirty();render();
- status.textContent='Randomized eligible names. Captains stay on their teams, +1 companions stay with their person, and no duplicate players were added.';
+ status.textContent='✓ Randomized '+shuffled.length+' eligible players, including paid plus-ones independently. Captains remain on their own teams. Save the draft and publish changes when ready.';
 }
 function render(){
  cards.replaceChildren();
@@ -108,7 +108,7 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes paid and RSVP-confirmed participants, and independently paid companions whose inviter has confirmed their RSVP.':'Choose eligible guests and paid companions with inviter RSVPs, or return to Randomize Teams to rebalance.');area.append(caption);
+ const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes paid and RSVP-confirmed guests plus paid named companions, each drawn independently.':'Choose eligible guests and paid companions with inviter RSVPs. Each player can be placed on either team, or use Randomize Teams to reshuffle.');area.append(caption);
  if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
  memberSelect.setAttribute('aria-label','Form participants who are paid and RSVP confirmed');
@@ -138,18 +138,9 @@ function openEditor(index){
  function addMember(member){
   if(!member){error.textContent='Choose a confirmed guest first.';return}
   if(!availableGuests().includes(member)){error.textContent='This guest is already assigned or no longer confirmed.';return}
-  const group=groupFor(member);
-  const allowedNames=new Set(guests.map(nameKey));
-  const people=(group?[group.primary,...(Array.isArray(group.companions)?group.companions:[])]:[member]).filter(n=>allowedNames.has(nameKey(n)));
-  for(const person of people){
-   if(teams.some((t,j)=>j!==index&&((canonical(t.captain)&&canonical(t.captain)===canonical(person))||t.members.some(m=>nameKey(m)===nameKey(person))))){
-    error.textContent='This participant or their +1 belongs to a different captain or team.';return;
-   }
-  }
-  for(const person of people){
-   if(canonical(person)===canonical(draft.captain))continue;
-   if(!draft.members.some(m=>nameKey(m)===nameKey(person)))draft.members.push(person);
-  }
+  // Members, including named plus-ones, may be assigned to separate teams.
+  // Do not silently move the person's inviter or any other companion.
+  if(canonical(member)!==canonical(draft.captain)&&!draft.members.some(m=>nameKey(m)===nameKey(member)))draft.members.push(member);
   error.textContent='';drawMembers();drawChoices();
  }
  const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
