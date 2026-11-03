@@ -462,8 +462,9 @@ export async function reconcileTeams(db){
    db.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first(),
    db.prepare('SELECT content,revision FROM team_drafts WHERE id=1').first()
   ]);
-  if(!orgRow||!formRow||!draftRow)return {ok:false,error:'Team sources unavailable'};
-  const organizer=JSON.parse(orgRow.content),form=JSON.parse(formRow.data);
+  if(!orgRow||!draftRow)return {ok:false,error:'Guest List or team drafts unavailable'};
+  // The Form is optional metadata for +1 labels; it never gates team membership.
+  const organizer=JSON.parse(orgRow.content),form=formRow?.data?JSON.parse(formRow.data):{records:[]};
   const eligibility=guestListEligible(organizer,form);
   const roles=organizer.squadRoles||{};
   const privateResult=balanceTeams(JSON.parse(draftRow.content),eligibility,roles);
