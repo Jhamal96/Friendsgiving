@@ -78,7 +78,7 @@ export async function onRequestPost({request,env}){
   }
   const eligible=new Set(eligibility.eligible.map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
-   if(!eligible.has(eligibleKey(member)))return reply({error:'Only matched, paid and RSVP-confirmed form participants can be published: '+member},400);
+   if(!eligible.has(eligibleKey(member)))return reply({error:'Only paid RSVP-confirmed guests or paid companions with inviter RSVPs can be published: '+member},400);
   }
   // Reconcile potential companion pairs and balance immediately before publish.
   const balanced=balanceTeams(cleaned,eligibility);
