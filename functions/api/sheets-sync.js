@@ -41,9 +41,14 @@ export async function onRequestPost({request,env}){
   if(!Array.isArray(data.guests))return json({error:'Planner data invalid'},503);
   const prior=data.sheetSync||{},baseline=prior.baseline||{},oldConflicts=new Set((prior.conflicts||[]).map(c=>nameKey(c.guest)+'::'+c.field));
   const known=new Map(data.guests.map((g,i)=>[nameKey(g?.[0]),i]).filter(([k])=>!!k));
+  const removed=data.removedGuests&&typeof data.removedGuests==='object'&&!Array.isArray(data.removedGuests)
+   ?data.removedGuests:{};
   let cellChanges=0,added=0;
   const conflicts=[];
   for(const [key,sheet] of incoming){
+   // Keep a removed guest archived locally until an organizer restores them.
+   // The full Google Sheets baseline remains authoritative but is never edited here.
+   if(Object.hasOwn(removed,key))continue;
    const localIndex=known.get(key);
    if(localIndex===undefined){
     if(data.guests.length>=500)return json({error:'Guest limit reached'},409);
