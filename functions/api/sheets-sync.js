@@ -61,8 +61,10 @@ export async function onRequestPost({request,env}){
     // Website-only changes are retained until two-way write-back is configured.
    }
   }
-  const nextBaseline={...baseline};
-  for(const [key,value] of incoming)nextBaseline[key]=value;
+  // A full successful Sheet sync is authoritative for current source presence.
+  // Keep removed guests in the website planner for history, but stop listing
+  // them as active Google Guest List participants for team assignment.
+  const nextBaseline=Object.fromEntries(incoming);
   const now=new Date().toISOString();
   const nextSync={...prior,spreadsheetId,tab:'Guest List',status:'sheet_to_site_active',lastImportedAt:now,baseline:nextBaseline,conflicts};
   const changed=cellChanges>0||added>0||!equal(prior.baseline,nextBaseline)||!equal(prior.conflicts||[],conflicts)||prior.status!=='sheet_to_site_active';
