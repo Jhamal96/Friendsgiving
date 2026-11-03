@@ -42,9 +42,15 @@ export async function onRequestGet({env}){
    const key=nameKey(record?.name);
    if(key)latest.set(key,record);
   }
-  const eligibleByRow=new Map((eligibility.groups||[]).map(g=>[
-   g.sourceRow,new Set((g.companions||[]).map(nameKey))
-  ]));
+  const paidByRowAndName=new Map(
+   (eligibility.eligible||[]).filter(p=>p.method==='paid-companion').map(p=>[
+    String(p.sourceRow)+'|'+nameKey(p.name),p.payment
+   ])
+  );
+  const companionReviewByRowAndName=new Map(
+   (eligibility.companionReview||[]).map(p=>[String(p.sourceRow)+'|'+nameKey(p.guest),p.reason])
+  );
+  const sponsorReviewByRow=new Map((eligibility.reviewRows||[]).map(r=>[r.sourceRow,r]));
   const excluded=new Set(['knickie','dannell']);
   const plusOneMatches=[],listed=new Set();
   for(const record of latest.values()){
@@ -59,13 +65,28 @@ export async function onRequestGet({env}){
     const unique=String(record.sourceRow)+'|'+key;
     if(listed.has(unique))continue;
     listed.add(unique);
-    const qualified=eligibleByRow.get(record.sourceRow)?.has(key)===true;
+    const paymentKey=String(record.sourceRow)+'|'+key;
+    const paidThrough=paidByRowAndName.get(paymentKey)||null;
+    const qualified=!!paidThrough;
+    const reviewCode=companionReviewByRowAndName.get(paymentKey)||
+     (sponsorReviewByRow.get(record.sourceRow)?.rsvpConfirmed===false?'inviter-rsvp-pending':'companion-payment-pending');
+    const issues={
+     'companion-payment-pending':'Companion payment not confirmed',
+     'duplicate-companion':'Duplicate first name; verify manually',
+     'duplicate-payment':'Payment already linked to another companion',
+     'ambiguous-payment':'More than one possible payment match',
+     'ambiguous-sponsor':'More than one possible RSVP sponsor',
+     'inviter-rsvp-pending':'Inviter has not confirmed RSVP'
+    };
     plusOneMatches.push({
      sourceRow:record.sourceRow,
      status:qualified?'matched':'review',
      guest:companion,
      with:registered,
-     reason:qualified?'Eligible with respondent':'Not team-eligible; check Guest List status or duplicate names'
+     paidThrough,
+     reason:qualified
+      ?(paidThrough==='inviter-plus-one'?'Paid via inviter +1 entry; RSVP confirmed':'Companion paid; inviter RSVP confirmed')
+      :(issues[reviewCode]||'Payment or RSVP needs review')
     });
    }
   }
