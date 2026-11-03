@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 let teams=[],guests=[],guestGroups=[],draftRevision=null,publishedBaseline='[]',isPublished=false,dirty=false;
 let saving=false,publishing=false,blocked=false,version=0,autosaveTimer=null,savePromise=null;
-let roleCandidates=[],roles={},roleCaptains=new Set(),roleRevision=null,rolesBusy=false;
+let roleCandidates=[],roles={},roleCaptains=new Set(),roleRevision=null,rolesBusy=false,plusOnePlayers=[];
 const ROLE_OPTIONS=[
  ['player','Playing'],['not_playing','Not playing'],['referee','Referee'],
  ['assistant_referee','Assistant referee'],['scorekeeper','Scorekeeper'],
@@ -144,6 +144,17 @@ function captainNames(){
  return {names:new Set(names.keys())};
 }
 function randomIndex(length){const top=4294967296,limit=Math.floor(top/length)*length;let n;do{const x=new Uint32Array(1);crypto.getRandomValues(x);n=x[0]}while(n>=limit);return n%length}
+function paidPlusOneKeys(){
+ return new Set(plusOnePlayers.filter(p=>p.playing).map(p=>canonical(p.name)));
+}
+function updatePlusOneDisplay(pending=0){
+ const info=$('plusOneEligibilityInfo');if(!info)return;
+ const active=paidPlusOneKeys();
+ const playing=guests.filter(name=>active.has(canonical(name))).length;
+ info.textContent='🎟️ '+playing+' paid +1 '+(playing===1?'player':'players')+
+  ' included individually in the next shuffle'+(pending?' · '+pending+' companion '+(pending===1?'entry needs':'entries need')+' payment or name review':'')+
+  '. Plus-ones may be on a different team from their inviter.';
+}
 function randomizeTeams(){
  if(rolesBusy){status.textContent='Finish saving player roles before randomizing.';return}
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
@@ -160,6 +171,7 @@ function randomizeTeams(){
   eligible.set(key,name);
  }
  const shuffled=[...eligible.values()];
+ const includedPlusOnes=shuffled.filter(name=>paidPlusOneKeys().has(canonical(name))).length;
  // Fisher-Yates: uniform shuffle using cryptographically secure indices.
  for(let i=shuffled.length-1;i>0;i--){
   const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
@@ -174,7 +186,7 @@ function randomizeTeams(){
  }
  teams.forEach((team,i)=>{team.members=next[i]});
  markDirty();render();
- status.textContent='✓ Randomized '+shuffled.length+' eligible players, including paid plus-ones independently. Captains remain on their own teams. Save the draft and publish changes when ready.';
+ status.textContent='✓ Randomized '+shuffled.length+' eligible players, including '+includedPlusOnes+' paid +1 '+(includedPlusOnes===1?'player':'players')+' as independent entries. Captains are unchanged. Draft autosaving; publish when ready.';
 }
 function render(){
  cards.replaceChildren();
@@ -197,6 +209,17 @@ function render(){
   card.append(el('p','team-count-details',details));
   card.append(el('p','muted','Captain: '+(team.captain||'To be announced')));
   const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'No additional players yet'));card.append(roster);
+  // Make it obvious that +1 companions were assigned individually, not as
+  // hidden additions tied to their inviter's team.
+  const plusKeys=paidPlusOneKeys();
+  const plusMembers=team.members.filter(member=>plusKeys.has(canonical(member)));
+  if(plusMembers.length){
+   const plusWrap=el('div','team-plus-one-players');
+   plusWrap.append(el('strong','team-plus-one-label','🎟️ Paid +1 players ('+plusMembers.length+')'));
+   const people=el('div','team-plus-one-list');
+   for(const member of plusMembers)people.append(el('span','team-plus-one-chip',member));
+   plusWrap.append(people);card.append(plusWrap);
+  }
   const actions=el('div','team-actions');
   actions.append(btn('Edit team',()=>openEditor(index),'primary'));
   const up=btn('↑',()=>move(index,-1)),down=btn('↓',()=>move(index,1));up.title='Move team up';down.title='Move team down';up.disabled=index===0;down.disabled=index===teams.length-1;actions.append(up,down);
@@ -329,6 +352,8 @@ async function start(){
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
   teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;draftRevision=result.revision;
+  plusOnePlayers=Array.isArray(result.plusOnePlayers)?result.plusOnePlayers:[];
+  updatePlusOneDisplay(result.companionNeedsReview||0);
   roles=result.roles&&typeof result.roles==='object'?result.roles:{};
   roleCandidates=Array.isArray(result.roleCandidates)?result.roleCandidates:[];
   roleCaptains=new Set(Array.isArray(result.roleCaptains)?result.roleCaptains:[]);
@@ -356,6 +381,8 @@ setInterval(async()=>{
   const previousRevision=draftRevision,previousGuests=JSON.stringify(guests),wasPublished=isPublished,previousRoleRevision=roleRevision;
   draftRevision=result.revision;
   guests=result.guests;guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;
+  plusOnePlayers=Array.isArray(result.plusOnePlayers)?result.plusOnePlayers:[];
+  updatePlusOneDisplay(result.companionNeedsReview||0);
   roles=result.roles&&typeof result.roles==='object'?result.roles:{};
   roleCandidates=Array.isArray(result.roleCandidates)?result.roleCandidates:[];
   roleCaptains=new Set(Array.isArray(result.roleCaptains)?result.roleCaptains:[]);
