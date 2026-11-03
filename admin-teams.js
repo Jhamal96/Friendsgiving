@@ -2,12 +2,20 @@
 const $=id=>document.getElementById(id);
 let teams=[],guests=[],guestGroups=[],draftRevision=null,publishedBaseline='[]',isPublished=false,dirty=false;
 let saving=false,publishing=false,blocked=false,version=0,autosaveTimer=null,savePromise=null;
+let roleCandidates=[],roles={},roleCaptains=new Set(),roleRevision=null,rolesBusy=false;
+const ROLE_OPTIONS=[
+ ['player','Playing'],['not_playing','Not playing'],['referee','Referee'],
+ ['assistant_referee','Assistant referee'],['scorekeeper','Scorekeeper'],
+ ['timekeeper','Timekeeper'],['coach','Coach'],['team_manager','Team manager'],
+ ['announcer','Announcer / MC'],['photographer','Photographer'],
+ ['volunteer','Event staff / volunteer'],['spectator','Spectator'],['other','Other position']
+];
 const cards=$('teamCards'),status=$('teamStatus'),save=$('saveTeams'),unpublish=$('unpublishTeams'),publication=$('teamPublicationStatus');
 const serial=teamList=>JSON.stringify(teamList);
 function refreshPublishButton(){
- save.disabled=publishing||blocked||!teams.length||(isPublished&&serial(teams)===publishedBaseline);
+ save.disabled=publishing||rolesBusy||blocked||!teams.length||(isPublished&&serial(teams)===publishedBaseline);
  save.textContent=isPublished?'Publish changes':'Publish teams';
- unpublish.disabled=publishing||blocked||!isPublished;
+ unpublish.disabled=publishing||rolesBusy||blocked||!isPublished;
  publication.textContent=isPublished?'● Published — guests can look up their team.':'○ Unpublished — guest lookups are hidden.';
 }
 function markDirty(){
@@ -44,6 +52,91 @@ function cleanName(name){return String(name||'').normalize('NFKD').replace(/[\u0
 function nameKey(name){const s=String(name||'').trim(),plus=/\+\s*1\s*$/.test(s);return cleanName(plus?s.replace(/\+\s*1\s*$/,''):s).toLowerCase()+(plus?' +1':'')}
 function canonical(name){const k=nameKey(name);const group=guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k);return group?nameKey(group.primary):k}
 function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=nameKey(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
+function roleNameKey(name){return nameKey(name).split(' ')[0]}
+function roleLabel(record){
+ const role=record?.role||'player';
+ return role==='other'?String(record?.title||'Other position'):ROLE_OPTIONS.find(x=>x[0]===role)?.[1]||'Playing';
+}
+function renderRoles(){
+ const root=$('roleList');if(!root)return;
+ root.replaceChildren();
+ const selected=$('roleFilter')?.value||'all';
+ const search=String($('roleSearch')?.value||'').trim().toLocaleLowerCase();
+ const entries=roleCandidates.filter(p=>{
+  const key=roleNameKey(p.name),isStaff=!!roles[key];
+  return (!search||p.name.toLocaleLowerCase().includes(search)||roleLabel(roles[key]).toLocaleLowerCase().includes(search))&&
+   (selected==='all'||selected==='staff'&&isStaff||selected==='playing'&&!isStaff);
+ });
+ const allStaff=roleCandidates.filter(p=>!!roles[roleNameKey(p.name)]).length;
+ $('roleSummary').textContent=(roleCandidates.length-allStaff)+' playing · '+allStaff+' staff / not playing';
+ if(!entries.length){
+  root.append(el('p','role-none',roleCandidates.length?'No matching participants in this view.':'No eligible guests or captains available yet.'));return;
+ }
+ for(const person of entries){
+  const key=roleNameKey(person.name),captain=roleCaptains.has(key),current=roles[key]||null;
+  const item=el('div','role-person'+(captain?' is-captain':current?' is-staff':''));
+  const identity=el('div','role-person-info');
+  identity.append(el('div','role-person-name',person.name));
+  identity.append(el('small','role-person-meta',captain?'Team captain · must remain playing':(person.kind==='Plus-one'?'Paid named plus-one':'Registered guest')+' · '+roleLabel(current)));
+  const controls=el('div','role-person-controls');
+  const select=el('select','role-person-select');
+  select.setAttribute('aria-label','Choose playing or staff role for '+person.name);
+  for(const [value,label] of ROLE_OPTIONS){
+   const opt=el('option','',label);opt.value=value;select.append(opt);
+  }
+  select.value=current?.role||'player';
+  select.disabled=rolesBusy||captain||blocked||roleRevision===null;
+  if(captain)select.title='Change the team captain first to assign this person a non-playing position';
+  controls.append(select);
+  const custom=el('div','role-custom');
+  custom.hidden=select.value!=='other';
+  const title=el('input');
+  title.type='text';title.maxLength=60;title.placeholder='Position name (e.g., Line judge)';
+  title.setAttribute('aria-label','Custom position for '+person.name);
+  title.value=current?.title||'';
+  const apply=btn('Save position',()=>setSquadRole(person.name,'other',title.value),'primary');
+  apply.disabled=rolesBusy||captain||blocked;
+  title.disabled=rolesBusy||captain||blocked;
+  title.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();apply.click()}});
+  custom.append(title,apply);controls.append(custom);
+  select.addEventListener('change',()=>{
+   if(select.value==='other'){
+    custom.hidden=false;title.focus();return;
+   }
+   custom.hidden=true;
+   setSquadRole(person.name,select.value,'');
+  });
+  item.append(identity,controls);root.append(item);
+ }
+}
+async function setSquadRole(name,role,title=''){
+ const feedback=$('roleStatus');
+ if(rolesBusy||blocked||roleRevision===null)return;
+ if(role==='other'&&!title.trim()){feedback.textContent='Enter the custom position name first.';return}
+ if(dirty||saving){
+  const saved=await saveDraft();
+  if(!saved){feedback.textContent='Save or resolve the team draft before changing roles.';return}
+ }
+ rolesBusy=true;renderRoles();refreshPublishButton();
+ feedback.textContent='Saving '+name+' as '+(role==='other'?title:ROLE_OPTIONS.find(r=>r[0]===role)?.[1]||role)+'…';
+ try{
+  const response=await fetch('/admin/api/team-roles',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({name,role,customTitle:title,revision:roleRevision})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(result.error||'Unable to update the role.');
+  await start();
+  feedback.textContent=result.teamWarning
+   ?'⚠ Role saved, but team synchronization needs review: '+result.teamWarning
+   :'✓ '+name+' is now '+(role==='other'?title:ROLE_OPTIONS.find(r=>r[0]===role)?.[1]||role)+'. Team assignments updated.';
+ }catch(e){
+  feedback.textContent='⚠ '+e.message;
+ }finally{rolesBusy=false;renderRoles();refreshPublishButton()}
+}
+$('roleSearch').addEventListener('input',renderRoles);
+$('roleFilter').addEventListener('change',renderRoles);
+
 function captainNames(){
  const names=new Map();
  for(const t of teams){const name=(t.captain||'').trim(),key=canonical(name);if(!key)continue;if(names.has(key))return {error:'Captain '+name+' is already assigned to '+names.get(key)+'. Give each team its own captain.'};names.set(key,t.name||'another team')}
@@ -51,6 +144,7 @@ function captainNames(){
 }
 function randomIndex(length){const top=4294967296,limit=Math.floor(top/length)*length;let n;do{const x=new Uint32Array(1);crypto.getRandomValues(x);n=x[0]}while(n>=limit);return n%length}
 function randomizeTeams(){
+ if(rolesBusy){status.textContent='Finish saving player roles before randomizing.';return}
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
  const captains=captainNames();
  if(captains.error){status.textContent='⚠ '+captains.error;return}
@@ -96,7 +190,7 @@ function render(){
   actions.append(btn('Remove',()=>{if(!confirm('Remove '+(team.name||'this team')+' from the team lineup?'))return;teams.splice(index,1);markDirty();render()},'danger'));
   card.append(actions);cards.append(card);
  });
- $('randomizeTeams').disabled=teams.length<2||!guests.length;
+ $('randomizeTeams').disabled=rolesBusy||teams.length<2||!guests.length;
  $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+t.members.length+(nameKey(t.captain)?1:0),0)+' assigned people (captains included)';
 }
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
@@ -190,6 +284,11 @@ async function start(){
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
   teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;draftRevision=result.revision;
+  roles=result.roles&&typeof result.roles==='object'?result.roles:{};
+  roleCandidates=Array.isArray(result.roleCandidates)?result.roleCandidates:[];
+  roleCaptains=new Set(Array.isArray(result.roleCaptains)?result.roleCaptains:[]);
+  roleRevision=Number.isSafeInteger(result.roleRevision)?result.roleRevision:null;
+  renderRoles();
   const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible people: primary guests paid and RSVP-confirmed, plus named companions paid with inviter RSVP. '+(result.companionNeedsReview||0)+' companions need payment or RSVP review.';
   updateSourceStatus(result);
   if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
@@ -209,14 +308,19 @@ setInterval(async()=>{
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.guests)||!Number.isSafeInteger(result.revision))return;
   if(dirty||saving||publishing||$('editTeam').open)return;
-  const previousRevision=draftRevision,previousGuests=JSON.stringify(guests),wasPublished=isPublished;
+  const previousRevision=draftRevision,previousGuests=JSON.stringify(guests),wasPublished=isPublished,previousRoleRevision=roleRevision;
   draftRevision=result.revision;
   guests=result.guests;guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;
+  roles=result.roles&&typeof result.roles==='object'?result.roles:{};
+  roleCandidates=Array.isArray(result.roleCandidates)?result.roleCandidates:[];
+  roleCaptains=new Set(Array.isArray(result.roleCaptains)?result.roleCaptains:[]);
+  roleRevision=Number.isSafeInteger(result.roleRevision)?result.roleRevision:null;
+  if(previousRoleRevision!==roleRevision)renderRoles();
   publishedBaseline=serial(result.publishedTeams||[]);
   const info=$('teamEligibilityInfo');
   if(info)info.textContent=guests.length+' eligible people: primary guests paid and RSVP-confirmed, plus named companions paid with inviter RSVP. '+(result.companionNeedsReview||0)+' companions need payment or RSVP review.';
   updateSourceStatus(result);
-  if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)||wasPublished!==isPublished){
+  if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)||wasPublished!==isPublished||previousRoleRevision!==roleRevision){
    teams=result.teams;render();refreshPublishButton();
    status.textContent=isPublished?'✓ Published teams refreshed from form and payment changes.':'✓ Team draft refreshed; guest lookups remain unpublished.';
   }
