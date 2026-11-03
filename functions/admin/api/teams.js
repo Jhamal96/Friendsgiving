@@ -80,7 +80,7 @@ export async function onRequestPost({request,env}){
   for(const team of cleaned)for(const member of team.members){
    if(!eligible.has(eligibleKey(member)))return reply({error:'Only paid RSVP-confirmed guests or paid companions with inviter RSVPs can be published: '+member},400);
   }
-  // Reconcile potential companion pairs and balance immediately before publish.
+  // Verify all eligible individual players, including paid plus-ones, and keep teams balanced before publishing.
   const balanced=balanceTeams(cleaned,eligibility);
   if(balanced.error)return reply({error:balanced.error},400);
   const next={...data,teams:balanced.teams,teamsPublished:true};
