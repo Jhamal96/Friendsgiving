@@ -27,11 +27,11 @@ export async function onRequestPost({request,env}){
    env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first(),
    env.FRIENDSGIVING_DB.prepare('SELECT content FROM team_drafts WHERE id=1').first()
   ]);
-  if(!orgRow||!formRow||!draftRow)return reply({error:'Guest list or team draft unavailable'},503);
+  if(!orgRow||!draftRow)return reply({error:'Guest List or team draft unavailable'},503);
   if(orgRow.revision!==revision)return reply({error:'Team roles changed elsewhere. Refresh and review before editing.'},409);
   const organizer=JSON.parse(orgRow.content);
   const draft=JSON.parse(draftRow.content);
-  const eligible=guestListEligible(organizer,JSON.parse(formRow.data));
+  const eligible=guestListEligible(organizer,formRow?.data?JSON.parse(formRow.data):{records:[]});
   const people=new Set(eligible.eligible.map(p=>squadRoleKey(p.name)));
   const captains=new Set();
   for(const t of [...draft,...(Array.isArray(organizer.teams)?organizer.teams:[])]){
