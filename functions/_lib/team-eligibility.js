@@ -286,6 +286,93 @@ export function formEligible(organizer,form){
  };
 }
 
+// Teams use the active Google Guest List, not Google Form submissions, as
+// their source of truth. The Form is consulted ONLY to label a named plus-one
+// in the admin interface; submitting a Form does not grant team eligibility.
+//
+// An active Guest List entry must (a) have its own name, (b) not be marked
+// with *, (c) not be a generic "+1" payment placeholder, and (d) have both
+// RSVP=Yes and Paid=Yes. Unconfirmed or unpaid people enter automatically on
+// a future sync after both fields become Yes. Star-marked captains are
+// deliberately excluded from this playing pool but retain their existing
+// reserved captain position, handled separately by balanceTeams.
+export function guestListEligible(organizer,form={}){
+ const baseline=organizer?.sheetSync?.status==='sheet_to_site_active'
+  ?organizer.sheetSync.baseline:null;
+ const activeSource=baseline&&typeof baseline==='object'&&!Array.isArray(baseline)
+  ?new Set(Object.keys(baseline).map(k=>String(k).trim().toLocaleLowerCase('en-US'))):null;
+ const removed=organizer?.removedGuests&&typeof organizer.removedGuests==='object'
+  ?organizer.removedGuests:{};
+ const rows=[],sourceNames=new Set();
+ let markedExcluded=0,placeholderExcluded=0,duplicateRows=0;
+ for(const row of Array.isArray(organizer?.guests)?organizer.guests:[]){
+  if(!Array.isArray(row))continue;
+  const raw=String(row[0]||'').trim(),sourceKey=raw.toLocaleLowerCase('en-US');
+  if(!sourceKey||activeSource&&!activeSource.has(sourceKey)||Object.hasOwn(removed,sourceKey))continue;
+  if(sourceNames.has(sourceKey)){duplicateRows++;continue}
+  sourceNames.add(sourceKey);
+  if(raw.includes('*')){markedExcluded++;continue}
+  if(/\+\s*1\s*$/i.test(raw)){placeholderExcluded++;continue}
+  const first=firstName(raw),key=firstKey(raw);
+  if(!first||!key)continue;
+  rows.push({row,raw,first,key,sourceKey});
+ }
+ // Public team lookup is by unique first name. If two Guest List people
+ // share that name, hold them for manual review rather than reveal either
+ // person's assignment to the other.
+ const freq=new Map();
+ for(const person of rows)freq.set(person.key,(freq.get(person.key)||0)+1);
+ const ambiguous=new Set([...freq].filter(([,n])=>n>1).map(([key])=>key));
+ const invited=new Map();
+ const allNamedCompanions=new Set();
+ for(const r of Array.isArray(form?.records)?form.records:[]){
+  const wants=String(r.plusOneYes||'').trim();
+  if(wants?!yes(wants):!r.plusOne)continue;
+  const inviter=firstKey(r.name);
+  const named=[r.plusOne,...String(r.additionalPlusOne||'').split(/[\r\n]+/)];
+  const local=new Set();
+  for(const raw of named){
+   const name=firstName(raw),key=firstKey(name);
+   if(!key||key===inviter||excludedCompanions.has(key)||local.has(key))continue;
+   local.add(key);allNamedCompanions.add(key);
+   if(invited.has(key))invited.set(key,null); // Multiple possible inviters.
+   else invited.set(key,{parent:inviter,sourceRow:r.sourceRow});
+  }
+ }
+ const eligible=[],aliases=new Map(),groups=[],matched=[];
+ let rsvpPending=0,paymentPending=0,bothPending=0,ambiguousCount=0;
+ for(const person of rows){
+  const {row,raw,first,key}=person;
+  if(ambiguous.has(key)){ambiguousCount++;continue}
+  const rsvp=yes(row[3]),paid=yes(row[4]);
+  if(!rsvp||!paid){
+   if(rsvp&&!paid)paymentPending++;
+   else if(paid&&!rsvp)rsvpPending++;
+   else bothPending++;
+   continue;
+  }
+  const companion=invited.get(key);
+  const isCompanion=!!companion;
+  const entry={
+   name:first,alias:cleanName(raw),method:isCompanion?'paid-companion':'guest-list',
+   ...(isCompanion?{parent:companion.parent,sourceRow:companion.sourceRow,payment:'individual-guest'}:{})
+  };
+  eligible.push(entry);
+  aliases.set(nameKey(raw),key);aliases.set(nameKey(cleanName(raw)),key);aliases.set(key,key);
+  matched.push({sourceRow:isCompanion?companion.sourceRow:null,guest:cleanName(raw),first,method:'guest-list'});
+ }
+ const eligibleKeys=new Set(eligible.map(x=>firstKey(x.name)));
+ const companionNeedsReview=[...allNamedCompanions].filter(k=>!eligibleKeys.has(k)).length;
+ return {
+  eligible,groups,aliases,matched,
+  source:'guest-list',sourceCount:sourceNames.size,
+  markedExcluded,placeholderExcluded,duplicateRows,ambiguousCount,
+  rsvpPending,paymentPending,bothPending,
+  reviewCount:rsvpPending+paymentPending+bothPending+ambiguousCount,
+  companionReviewCount:companionNeedsReview
+ };
+}
+
 export function balanceTeams(input,eligibility,squadRoles={}){
  if(!Array.isArray(input)||!input.length)return {teams:input||[],changed:false,assigned:0,removed:0,added:0,moved:0};
  const teams=input.map(t=>({...t,captain:firstName(t.captain),members:Array.isArray(t.members)?[...t.members]:[]}));
@@ -377,7 +464,7 @@ export async function reconcileTeams(db){
   ]);
   if(!orgRow||!formRow||!draftRow)return {ok:false,error:'Team sources unavailable'};
   const organizer=JSON.parse(orgRow.content),form=JSON.parse(formRow.data);
-  const eligibility=formEligible(organizer,form);
+  const eligibility=guestListEligible(organizer,form);
   const roles=organizer.squadRoles||{};
   const privateResult=balanceTeams(JSON.parse(draftRow.content),eligibility,roles);
   const isPublished=organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0);
