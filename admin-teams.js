@@ -1,10 +1,15 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-let teams=[],guests=[],draftRevision=null,publishedBaseline='[]',dirty=false;
+let teams=[],guests=[],guestGroups=[],draftRevision=null,publishedBaseline='[]',isPublished=false,dirty=false;
 let saving=false,publishing=false,blocked=false,version=0,autosaveTimer=null,savePromise=null;
-const cards=$('teamCards'),status=$('teamStatus'),save=$('saveTeams');
+const cards=$('teamCards'),status=$('teamStatus'),save=$('saveTeams'),unpublish=$('unpublishTeams'),publication=$('teamPublicationStatus');
 const serial=teamList=>JSON.stringify(teamList);
-function refreshPublishButton(){save.disabled=publishing||blocked||serial(teams)===publishedBaseline}
+function refreshPublishButton(){
+ save.disabled=publishing||blocked||!teams.length||(isPublished&&serial(teams)===publishedBaseline);
+ save.textContent=isPublished?'Publish changes':'Publish teams';
+ unpublish.disabled=publishing||blocked||!isPublished;
+ publication.textContent=isPublished?'● Published — guests can look up their team.':'○ Unpublished — guest lookups are hidden.';
+}
 function markDirty(){
  dirty=true;version++;status.textContent='Draft changed · Saving automatically…';
  refreshPublishButton();clearTimeout(autosaveTimer);
@@ -24,7 +29,7 @@ async function saveDraft(){
    if(!response.ok)throw Error(result.error||'Could not autosave teams. Please try editing again.');
    draftRevision=result.revision;
    if(sentVersion===version)dirty=false;
-   status.textContent=dirty?'Saving newer team edits…':serial(teams)===publishedBaseline?'✓ Draft autosaved · Already published':'✓ Draft autosaved · Not yet published';
+   status.textContent=dirty?'Saving newer team edits…':isPublished&&serial(teams)===publishedBaseline?'✓ Draft autosaved · Published':'✓ Draft autosaved · Not yet published';
   }catch(e){dirty=true;status.textContent='⚠ '+e.message}
   finally{saving=false;refreshPublishButton();if(dirty&&!blocked&&version!==sentVersion){clearTimeout(autosaveTimer);autosaveTimer=setTimeout(saveDraft,400)}}
  })();
@@ -35,11 +40,14 @@ async function saveDraft(){
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function btn(label,action,cls){const b=el('button',cls,label);b.type='button';b.addEventListener('click',action);return b}
 function input(label,value,limit,change){const l=el('label','edit-label',label),i=el('input');i.type='text';i.maxLength=limit;i.value=value||'';i.addEventListener('input',()=>change(i.value));l.append(i);return {label:l,input:i}}
-function nameKey(name){return String(name||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en-US')}
+function cleanName(name){return String(name||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').replace(/\s+/g,' ').trim()}
+function nameKey(name){const s=String(name||'').trim(),plus=/\+\s*1\s*$/.test(s);return cleanName(plus?s.replace(/\+\s*1\s*$/,''):s).toLowerCase()+(plus?' +1':'')}
+function canonical(name){const k=nameKey(name);const group=guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k);return group?nameKey(group.primary):k}
+function groupFor(name){const k=nameKey(name);return guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k||nameKey(g.plusOne)===k)}
 function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=nameKey(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
 function captainNames(){
  const names=new Map();
- for(const t of teams){const name=(t.captain||'').trim(),key=nameKey(name);if(!key)continue;if(names.has(key))return {error:'Captain '+name+' is already assigned to '+names.get(key)+'. Give each team its own captain.'};names.set(key,t.name||'another team')}
+ for(const t of teams){const name=(t.captain||'').trim(),key=canonical(name);if(!key)continue;if(names.has(key))return {error:'Captain '+name+' is already assigned to '+names.get(key)+'. Give each team its own captain.'};names.set(key,t.name||'another team')}
  return {names:new Set(names.keys())};
 }
 function randomIndex(length){const top=4294967296,limit=Math.floor(top/length)*length;let n;do{const x=new Uint32Array(1);crypto.getRandomValues(x);n=x[0]}while(n>=limit);return n%length}
@@ -159,12 +167,12 @@ async function start(){
   if(!response.ok)throw Error('Unable to load saved team drafts.');
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
-  teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];draftRevision=result.revision;
+  teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;draftRevision=result.revision;
   const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
   if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
   publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
   $('addTeam').disabled=false;render();refreshPublishButton();
-  if(!result.syncWarning)status.textContent=serial(teams)===publishedBaseline?'Autosave on · All teams already published':'Autosave on · Private team draft recovered, not published';
+  if(!result.syncWarning)status.textContent=isPublished&&serial(teams)===publishedBaseline?'Autosave on · Teams published':'Autosave on · Private draft ready; publish when you choose';
  }catch(e){status.textContent='⚠ '+e.message;$('addTeam').disabled=true;save.disabled=true}
 }
 $('addTeam').addEventListener('click',()=>openEditor(null));
@@ -178,15 +186,15 @@ setInterval(async()=>{
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.guests)||!Number.isSafeInteger(result.revision))return;
   if(dirty||saving||publishing||$('editTeam').open)return;
-  const previousRevision=draftRevision,previousGuests=JSON.stringify(guests);
+  const previousRevision=draftRevision,previousGuests=JSON.stringify(guests),wasPublished=isPublished;
   draftRevision=result.revision;
-  guests=result.guests;
+  guests=result.guests;guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;
   publishedBaseline=serial(result.publishedTeams||[]);
   const info=$('teamEligibilityInfo');
   if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
-  if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)){
+  if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)||wasPublished!==isPublished){
    teams=result.teams;render();refreshPublishButton();
-   status.textContent='✓ Team assignments refreshed from RSVP and payment changes. Review, then publish any new draft lineup.';
+   status.textContent=isPublished?'✓ Published teams refreshed from form and payment changes.':'✓ Team draft refreshed; guest lookups remain unpublished.';
   }
  }catch{}
 },60000);
@@ -199,14 +207,31 @@ save.addEventListener('click',async()=>{
   const latest=await fetch('/admin/api/teams',{cache:'no-store'});
   if(!latest.ok)throw Error('Unable to confirm the published lineup.');
   const current=await latest.json();
-  if(serial(current.teams||[])!==publishedBaseline)throw Error('Someone else published a new lineup. Refresh to review it before publishing yours.');
+  if(serial(current.teams||[])!==publishedBaseline||current.isPublished!==isPublished)throw Error('Publication changed elsewhere. Refresh to review it.');
   const publishingVersion=version,snapshot=structuredClone(teams);
   status.textContent='Publishing saved team assignments…';
-  const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teams:snapshot,revision:current.revision})});
+  const r=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'publish',teams:snapshot,revision:current.revision})});
   const result=await r.json().catch(()=>({}));
   if(r.status===409)throw Error('The guest list changed during publication. Refresh and review before publishing.');
   if(!r.ok)throw Error(result.error||'Unable to publish team lineup.');
-  publishedBaseline=serial(result.teams);status.textContent=version===publishingVersion?'✓ Teams published! The main page is updated.':'✓ Earlier draft published; newer edits still need publishing.';
+  publishedBaseline=serial(result.teams);isPublished=true;status.textContent=version===publishingVersion?'✓ Teams published! The main page is updated.':'✓ Earlier draft published; newer edits still need publishing.';
+ }catch(e){status.textContent='⚠ '+e.message}
+ finally{publishing=false;refreshPublishButton()}
+});
+unpublish.addEventListener('click',async()=>{
+ if(!isPublished||publishing||blocked)return;
+ if(!confirm('Hide published teams from the Friendsgiving page? Your saved teams and private drafts will remain.'))return;
+ publishing=true;refreshPublishButton();
+ try{
+  const latest=await fetch('/admin/api/teams',{cache:'no-store'});
+  if(!latest.ok)throw Error('Unable to check publication status.');
+  const current=await latest.json();
+  if(!current.isPublished||serial(current.teams||[])!==publishedBaseline)throw Error('The public lineup changed. Refresh before unpublishing.');
+  const response=await fetch('/admin/api/teams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'unpublish',revision:current.revision})});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(result.error||'Unable to unpublish teams.');
+  isPublished=false;publishedBaseline=serial(result.teams||[]);
+  status.textContent='✓ Teams unpublished. Public lookups are hidden. Your private draft remains saved.';
  }catch(e){status.textContent='⚠ '+e.message}
  finally{publishing=false;refreshPublishButton()}
 });
