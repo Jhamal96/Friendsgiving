@@ -260,7 +260,7 @@ export function formEligible(organizer,form){
    payment='inviter-plus-one';
   }
   used.add(key);
-  eligible.push({name:c.name,alias:c.name,method:'paid-companion',parent:ownerKey,payment});
+  eligible.push({name:c.name,alias:c.name,method:'paid-companion',parent:ownerKey,payment,sourceRow:p.sourceRow});
   aliases.set(key,key);
   const items=confirmedCompanions.get(p.sourceRow)||[];
   items.push(c.name);confirmedCompanions.set(p.sourceRow,items);
