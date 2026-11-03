@@ -48,6 +48,8 @@ export async function onRequestGet({request,env}){
    guestGroups:matched.groups,
    isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
+   paidCompanions:matched.eligible.filter(x=>x.method==='paid-companion').length,
+   companionNeedsReview:matched.companionReviewCount,
    syncSources:{
     guestLastSuccessAt:guestSync?.last_success_at||null,
     formLastSuccessAt:formData.lastImportedAt||null,
@@ -94,7 +96,7 @@ export async function onRequestPost({request,env}){
    }
   }
   for(const team of teams)for(const name of team.members){
-   if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid and RSVP-confirmed form participants can be added: '+name},400);
+   if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid RSVP-confirmed guests or named paid companions with inviter RSVP can be added: '+name},400);
   }
   const result=await env.FRIENDSGIVING_DB.prepare('UPDATE team_drafts SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(teams),body.revision).run();
   if(!result.meta.changes)return reply({error:'Team draft changed in another tab. Refresh to review the latest changes.'},409);
