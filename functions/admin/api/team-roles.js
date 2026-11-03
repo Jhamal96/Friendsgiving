@@ -1,4 +1,4 @@
-import {formEligible,reconcileTeams} from '../../_lib/team-eligibility.js';
+import {guestListEligible,reconcileTeams} from '../../_lib/team-eligibility.js';
 import {SQUAD_ROLE_LABELS,readSquadRoles,squadRoleKey} from '../../_lib/squad-roles.js';
 // Organizer-only roster classification. Roles are not included in the public
 // Guest List or team lookup API and never change Google Sheets/Forms source data.
@@ -31,7 +31,7 @@ export async function onRequestPost({request,env}){
   if(orgRow.revision!==revision)return reply({error:'Team roles changed elsewhere. Refresh and review before editing.'},409);
   const organizer=JSON.parse(orgRow.content);
   const draft=JSON.parse(draftRow.content);
-  const eligible=formEligible(organizer,JSON.parse(formRow.data));
+  const eligible=guestListEligible(organizer,JSON.parse(formRow.data));
   const people=new Set(eligible.eligible.map(p=>squadRoleKey(p.name)));
   const captains=new Set();
   for(const t of [...draft,...(Array.isArray(organizer.teams)?organizer.teams:[])]){
