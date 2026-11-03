@@ -23,6 +23,7 @@ function syncFieldDayResponses(){
    records.push({
     sourceRow:index+2,name:r[1].trim(),shirt:r[4].trim(),
     plusOneYes:r[5].trim(),plusOne:r[6].trim(),plusOneShirt:r[7].trim(),
+    additionalPlusOne:r[8].trim(),
     children:r[9].trim(),athletic:r[11].trim()
    });
   });
