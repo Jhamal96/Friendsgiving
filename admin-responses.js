@@ -19,11 +19,23 @@ async function load(){
   $('reviewCount').textContent=d.needsReviewCount;
   $('plusOneCount').textContent=d.plusOneMatchedCount;
   fill('matchedNames',d.matched||[],r=>item(r.guest,'Source row '+r.sourceRow+' · '+r.matchMethod));
-  fill('reviewRows',d.review||[],r=>item('Response row '+r.sourceRow,r.status==='ambiguous'?'Possible multiple matches':'Not matched automatically'));
+  const reasons={
+   'no-match':'Name not found in Guest List',
+   'ambiguous-name':'Multiple possible guest matches; verify manually',
+   'duplicate-match':'Guest List entry already matched to another form response',
+   'payment-or-rsvp-pending':'RSVP and payment must both be Yes',
+   'duplicate-first-name':'First name already used; distinguish before assigning'
+  };
+  fill('reviewRows',d.review||[],r=>item('Response row '+r.sourceRow,reasons[r.status]||'Review original Form and Guest List'));
   fill('plusOneMatches',d.plusOneMatches||[],r=>item(r.guest||'Response row '+r.sourceRow,r.status==='matched'?'Matched plus-one':'Review plus-one in original Sheet'));
-  $('responseStatus').textContent=d.mode==='live_google_form_sync'
-    ?'Response connection active. Last received '+new Date(d.lastImportedAt).toLocaleString()+'.'
-    :'Initial form snapshot imported. Enable the Forms Apps Script for ongoing automatic updates.';
+  const fmt=value=>value?new Date(value).toLocaleString():'No successful check';
+  const formOk=d.formConnectionFresh===true,guestOk=d.guestConnectionFresh===true;
+  const message='Guest List checked: '+fmt(d.lastGuestSync)+'. Forms received: '+fmt(d.lastImportedAt)+'.';
+  $('responseStatus').textContent=message+(formOk&&guestOk
+   ?' Both connections are receiving updates.'
+   :' At least one source has not checked in recently; review the Apps Script triggers in Settings.')+
+   (d.syncConflicts?' '+d.syncConflicts+' Guest List conflicts need review.':'')+
+   ' '+d.eligibleParticipantCount+' eligible people including named companions. Teams are '+(d.isPublished?'published.':'unpublished.');
  }catch{$('responseStatus').textContent='Unable to load response matching. Reload or check connections in Settings.'}
 }
 $('reloadMatches').addEventListener('click',load);load();
