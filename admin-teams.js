@@ -57,7 +57,8 @@ function randomizeTeams(){
  if(captains.error){status.textContent='⚠ '+captains.error;return}
  if(!guests.length){status.textContent='No matched paid and RSVP-confirmed form names are available.';return}
  if(teams.some(t=>t.members.length)&&!confirm('Randomize all eligible form participants? Captains stay on their own teams, and each +1 stays with the person who brought them. This replaces private draft assignments.'))return;
- const groups=guestGroups.length?guestGroups.map(g=>({...g})):[...new Set(guests)].map(g=>({primary:g,alias:g,plusOne:null}));
+ const allowedNames=new Set(guests.map(nameKey));
+ const groups=guestGroups.length?guestGroups.map(g=>({...g})):[...new Set(guests)].map(g=>({primary:g,alias:g,companions:[]}));
  const captainOwner=new Map();
  teams.forEach((t,i)=>{const k=canonical(t.captain);if(k)captainOwner.set(k,i)});
  const shuffled=groups.slice();
@@ -66,7 +67,7 @@ function randomizeTeams(){
  for(const group of shuffled){
   const key=canonical(group.primary);
   if(!key||used.has(key))continue;
-  const members=[group.primary,...(Array.isArray(group.companions)?group.companions:[])];
+  const members=[group.primary,...(Array.isArray(group.companions)?group.companions:[])].filter(n=>allowedNames.has(nameKey(n)));
   const owner=captainOwner.get(key);
   const index=owner!==undefined?owner:sizes.indexOf(Math.min(...sizes));
   for(const name of members){
@@ -74,7 +75,7 @@ function randomizeTeams(){
    if(!id||used.has(id)||captains.names.has(canonical(name)))continue;
    next[index].push(name);sizes[index]++;used.add(id);
   }
-  used.add(key);
+  if(allowedNames.has(nameKey(group.primary)))used.add(key);
  }
  teams.forEach((team,i)=>{team.members=next[i]});
  markDirty();render();
@@ -107,7 +108,7 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams will include only form participants marked both paid and RSVP-confirmed.':'Choose verified paid and RSVP-confirmed form participants, or return to Randomize Teams to rebalance.');area.append(caption);
+ const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes paid and RSVP-confirmed participants, and independently paid companions whose inviter has confirmed their RSVP.':'Choose eligible guests and paid companions with inviter RSVPs, or return to Randomize Teams to rebalance.');area.append(caption);
  if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
  memberSelect.setAttribute('aria-label','Form participants who are paid and RSVP confirmed');
@@ -138,7 +139,8 @@ function openEditor(index){
   if(!member){error.textContent='Choose a confirmed guest first.';return}
   if(!availableGuests().includes(member)){error.textContent='This guest is already assigned or no longer confirmed.';return}
   const group=groupFor(member);
-  const people=group?[group.primary,...(Array.isArray(group.companions)?group.companions:[])]:[member];
+  const allowedNames=new Set(guests.map(nameKey));
+  const people=(group?[group.primary,...(Array.isArray(group.companions)?group.companions:[])]:[member]).filter(n=>allowedNames.has(nameKey(n)));
   for(const person of people){
    if(teams.some((t,j)=>j!==index&&((canonical(t.captain)&&canonical(t.captain)===canonical(person))||t.members.some(m=>nameKey(m)===nameKey(person))))){
     error.textContent='This participant or their +1 belongs to a different captain or team.';return;
@@ -153,7 +155,7 @@ function openEditor(index){
  const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
  const randomButton=btn('🎲 Random Pick',()=>{
   const available=availableGuests();
-  if(!available.length){error.textContent='No unassigned paid and confirmed form participants are available.';return}
+  if(!available.length){error.textContent='No unassigned eligible guests or paid companions are available.';return}
   // Use the browser's random values, avoiding modulo bias for a fair random pick.
   const max=0x100000000,limit=Math.floor(max/available.length)*available.length;
   let value;do{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);value=bytes[0]}while(value>=limit);
@@ -197,7 +199,7 @@ async function start(){
   const result=await response.json();
   if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
   teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;draftRevision=result.revision;
-  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
+  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible people: primary guests paid and RSVP-confirmed, plus named companions paid with inviter RSVP. '+(result.companionNeedsReview||0)+' companions need payment or RSVP review.';
   updateSourceStatus(result);
   if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
   publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
@@ -221,7 +223,7 @@ setInterval(async()=>{
   guests=result.guests;guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;
   publishedBaseline=serial(result.publishedTeams||[]);
   const info=$('teamEligibilityInfo');
-  if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
+  if(info)info.textContent=guests.length+' eligible people: primary guests paid and RSVP-confirmed, plus named companions paid with inviter RSVP. '+(result.companionNeedsReview||0)+' companions need payment or RSVP review.';
   updateSourceStatus(result);
   if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)||wasPublished!==isPublished){
    teams=result.teams;render();refreshPublishButton();
