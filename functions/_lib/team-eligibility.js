@@ -9,6 +9,72 @@ const yes=value=>['yes','paid','confirmed','attending','true','1'].includes(Stri
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const excludedCompanions=new Set(['knickie','dannell']);
 
+const nameTokens=value=>{
+ const text=String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+  .replace(/['’`]/g,'').replace(/[^a-z]+/g,' ').replace(/\s+/g,' ').trim();
+ const tokens=text?text.split(' '):[];
+ while(tokens.length>2&&['jr','sr','ii','iii','iv'].includes(tokens[tokens.length-1]))tokens.pop();
+ return tokens;
+};
+function nameShapes(value){
+ const original=String(value||''),normal=nameTokens(original);
+ const shapes=[normal];
+ // "Surname, First Middle" is an explicit, common spreadsheet format.
+ if(original.includes(',')){
+  const [last,first]=original.split(',',2);
+  const a=nameTokens(last),b=nameTokens(first);
+  if(a.length===1&&b.length)shapes.push([...b,a[0]]);
+ }
+ return shapes.filter(x=>x.length);
+}
+function compareNameRank(formName,guestName,formFrequency,guestFrequency){
+ const forms=nameShapes(formName),guests=nameShapes(guestName);
+ for(const f of forms)for(const g of guests){
+  if(f.length>=2&&g.length>=2&&f.join(' ')===g.join(' '))return {rank:0,method:'exact'};
+ }
+ for(const f of forms)for(const g of guests){
+  if(f.length>=2&&g.length>=2&&f[0]===g[0]&&f.at(-1)===g.at(-1)&&f.at(-1).length>1){
+   return {rank:1,method:'first-last'};
+  }
+ }
+ for(const f of forms)for(const g of guests){
+  if(f.length>=2&&g.length>=2&&f[0]===g[0]&&f.at(-1)[0]===g.at(-1)[0]&&(f.at(-1).length===1||g.at(-1).length===1)){
+   return {rank:2,method:'unique-initial'};
+  }
+ }
+ for(const f of forms)for(const g of guests){
+  if(f[0]&&g.length===1&&f[0]===g[0]&&formFrequency.get(f[0])===1&&guestFrequency.get(g[0])===1){
+   return {rank:3,method:'unique-first'};
+  }
+ }
+ return null;
+}
+const distanceAtMostOne=(a,b)=>{
+ if(Math.abs(a.length-b.length)>1)return false;
+ if(a===b)return true;
+ let i=0,j=0,edits=0;
+ while(i<a.length&&j<b.length){
+  if(a[i]===b[j]){i++;j++;continue}
+  if(++edits>1)return false;
+  if(a.length>b.length)i++;else if(b.length>a.length)j++;else{i++;j++}
+ }
+ return edits+(a.length-i)+(b.length-j)<=1;
+};
+function reviewSuggestions(formName,guestRows){
+ const f=nameTokens(formName),first=f[0],last=f.at(-1);
+ const scored=[];
+ if(!first)return [];
+ for(const row of guestRows){
+  const g=nameTokens(row[0]),name=cleanName(row[0]);
+  if(!g.length)continue;
+  const sameFirst=g[0]===first;
+  const possibleTypo=f.length>=2&&g.length>=2&&distanceAtMostOne(g[0],first)&&g.at(-1)[0]===last?.[0];
+  if(sameFirst||possibleTypo)scored.push({name,score:sameFirst?0:1});
+ }
+ return scored.sort((a,b)=>a.score-b.score||a.name.localeCompare(b.name)).slice(0,3).map(x=>x.name);
+}
+
+
 // Each entry is a distinct name on the Google Form. Extra companions appear
 // on separate lines, possibly followed by shirt-size notes or parentheses.
 function extraCompanions(value){
@@ -29,33 +95,60 @@ export function formEligible(organizer,form){
  for(const r of Array.isArray(form?.records)?form.records:[]){
   const key=nameKey(r?.name);
   if(!key)continue;
-  responders.set(key,{name:cleanName(r.name),key,sourceRow:Number.isInteger(r.sourceRow)?r.sourceRow:null,plusOne:cleanName(r.plusOne),plusOneYes:r.plusOneYes,additionalPlusOne:r.additionalPlusOne||''});
+  responders.set(key,{name:cleanName(r.name),rawName:String(r.name||''),key,sourceRow:Number.isInteger(r.sourceRow)?r.sourceRow:null,plusOne:cleanName(r.plusOne),plusOneYes:r.plusOneYes,additionalPlusOne:r.additionalPlusOne||''});
  }
  const forms=[...responders.values()],formFirst=new Map(),sheetFirst=new Map();
- for(const r of forms){const k=firstKey(r.name);formFirst.set(k,(formFirst.get(k)||0)+1)}
- for(const r of paymentRows){const k=firstKey(r[0]);sheetFirst.set(k,(sheetFirst.get(k)||0)+1)}
+ for(const person of forms){const first=nameTokens(person.rawName)[0];if(first)formFirst.set(first,(formFirst.get(first)||0)+1)}
+ for(const row of paymentRows){const first=nameTokens(row[0])[0];if(first)sheetFirst.set(first,(sheetFirst.get(first)||0)+1)}
  const review=[],usedSheet=new Set(),matched=[],seenFirst=new Set();
- for(const person of forms){
-  const parts=words(person.name),first=parts[0],last=parts.at(-1);
-  let matches=paymentRows.map((r,i)=>({r,i})).filter(x=>nameKey(x.r[0])===person.key);
-  let method='exact';
-  if(!matches.length&&parts.length>=2){
-   matches=paymentRows.map((r,i)=>({r,i})).filter(x=>{
-    const w=words(x.r[0]);return w.length>=2&&w[0]===first&&w.at(-1)[0]===last[0];
-   });method='unique-initial';
+ const plan=forms.map(person=>{
+  const candidates=paymentRows.map((row,index)=>{
+   const quality=compareNameRank(person.rawName,row[0],formFirst,sheetFirst);
+   return quality?{index,row,...quality}:null;
+  }).filter(Boolean);
+  const rank=candidates.length?Math.min(...candidates.map(c=>c.rank)):null;
+  const best=rank===null?[]:candidates.filter(c=>c.rank===rank);
+  return {person,rank,best};
+ });
+ // Strong full-name matches win before surname-initial and unique-first fallback.
+ // A guest may only be claimed by one response. Never infer fuzzy matches.
+ for(let priority=0;priority<=3;priority++){
+  const eligible=plan.filter(p=>p.rank===priority&&p.best.length===1&&!usedSheet.has(p.best[0].index));
+  const collisions=new Map();
+  for(const p of eligible){
+   const index=p.best[0].index;
+   collisions.set(index,(collisions.get(index)||0)+1);
   }
-  if(!matches.length&&formFirst.get(first)===1&&sheetFirst.get(first)===1){
-   matches=paymentRows.map((r,i)=>({r,i})).filter(x=>words(x.r[0]).length===1&&firstKey(x.r[0])===first);
-   method='unique-first';
+  for(const p of eligible){
+   const hit=p.best[0];
+   if(collisions.get(hit.index)!==1)continue;
+   p.claimed=hit;
+   usedSheet.add(hit.index);
   }
-  if(matches.length!==1||usedSheet.has(matches[0].i)){
-   review.push({sourceRow:person.sourceRow,reason:matches.length>1?'ambiguous-name':matches.length===1?'duplicate-match':'no-match'});continue;
+ }
+ for(const p of plan){
+  const person=p.person,hit=p.claimed;
+  const common={sourceRow:person.sourceRow};
+  if(!hit){
+   const reason=p.best.length>1?'ambiguous-name':
+    p.best.length===1&&usedSheet.has(p.best[0].index)?'duplicate-match':
+    p.best.length===1?'ambiguous-name':'no-match';
+   const suggestions=p.best.length?p.best.slice(0,3).map(x=>cleanName(x.row[0])):reviewSuggestions(person.rawName,paymentRows);
+   review.push({...common,reason,suggestions});
+   continue;
   }
-  const hit=matches[0],row=hit.r;usedSheet.add(hit.i);
-  if(!yes(row[3])||!yes(row[4])){review.push({sourceRow:person.sourceRow,reason:'payment-or-rsvp-pending'});continue}
-  if(seenFirst.has(first)){review.push({sourceRow:person.sourceRow,reason:'duplicate-first-name'});continue}
+  const row=hit.row;
+  if(!yes(row[3])||!yes(row[4])){
+   review.push({...common,reason:'payment-or-rsvp-pending',guest:cleanName(row[0]),method:hit.method,rsvpConfirmed:yes(row[3]),paidConfirmed:yes(row[4])});
+   continue;
+  }
+  const first=nameTokens(person.name)[0];
+  if(seenFirst.has(first)){
+   review.push({...common,reason:'duplicate-first-name',guest:cleanName(row[0]),method:hit.method});
+   continue;
+  }
   seenFirst.add(first);
-  matched.push({first:firstName(person.name),formName:person.name,sheetName:cleanName(row[0]),method,sourceRow:person.sourceRow,person});
+  matched.push({first:firstName(person.name),formName:person.name,sheetName:cleanName(row[0]),method:hit.method,sourceRow:person.sourceRow,person});
  }
  // Primary first names take priority over companion names, and each name
  // can appear on at most one team. Preserve full-name aliases for lookups.
