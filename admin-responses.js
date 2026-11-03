@@ -7,7 +7,13 @@ const item=(name,description)=>{
  const li=document.createElement('li'),main=document.createElement('span');main.textContent=name;li.append(main);
  if(description){const small=document.createElement('small');small.textContent=description;li.append(small)}return li;
 };
-function fill(target,rows,render){const box=$(target);box.replaceChildren();if(!rows.length)box.append(item('None yet',''));else rows.forEach(row=>box.append(render(row)));}
+function fill(target,rows,render){
+ const box=$(target);box.replaceChildren();
+ if(!rows.length){box.append(item('None yet',''));return}
+ rows.forEach((row,index)=>{
+  const li=render(row);li.dataset.searchIndex=String(index);box.append(li);
+ });
+}
 // Form and Guest List content changes are tracked separately from routine
 // sync timestamps. Only acknowledge a particular snapshot after the organizer
 // clicks Acknowledge; the same update never pops up again in this browser.
@@ -167,6 +173,23 @@ window.addEventListener('storage',event=>{
  latestChanges=changesSince(latestSnapshot,ack);
  if(!latestChanges.length&&syncDialog.open)syncDialog.close();
 });
+function responseSearch(query,matches){
+ const results=[];
+ for(const [id,category] of [['matchedNames','Ready for teams'],['reviewRows','Needs review'],['plusOneMatches','Plus-ones']]){
+  const root=$(id);
+  for(const li of root?.querySelectorAll('[data-search-index]')||[]){
+   const heading=li.querySelector('span')?.textContent||'Response';
+   const description=li.querySelector('small')?.textContent||'';
+   if(!matches(query,heading,description,category))continue;
+   results.push({
+    title:heading,detail:description,group:category,
+    activate:()=>window.FriendsgivingSearch?.navigate(li)
+   });
+  }
+ }
+ return results;
+}
+window.FriendsgivingSearch?.register(responseSearch);
 async function load(silent=false){
  if(loading)return;
  loading=true;
@@ -220,6 +243,7 @@ async function load(silent=false){
    (d.syncConflicts?' '+d.syncConflicts+' Guest List conflicts need review.':'')+
    ' '+d.eligibleParticipantCount+' eligible people including named companions. Teams are '+(d.isPublished?'published.':'unpublished.');
   considerUpdate(d.changeSnapshot);
+  window.FriendsgivingSearch?.refresh();
  }catch{if(!silent)$('responseStatus').textContent='Unable to load response matching. Reload or check connections in Settings.'}
  finally{loading=false}
 }
