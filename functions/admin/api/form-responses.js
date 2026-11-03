@@ -14,11 +14,25 @@ export async function onRequestGet({env}){
   if(!formRow||!guestRow)return reply({error:'Form and guest sources are not initialized'},503);
   const form=JSON.parse(formRow.data),organizer=JSON.parse(guestRow.content);
   const eligibility=formEligible(organizer,form);
+  const methodLabels={
+   'exact':'Exact full name',
+   'first-last':'First and surname (middle name ignored)',
+   'unique-initial':'First name and last initial',
+   'unique-first':'Unique first name'
+  };
   const matched=eligibility.matched.map(m=>({
-   sourceRow:m.sourceRow,status:'matched',guest:m.guest,matchMethod:
-    m.method==='exact'?'Exact name':m.method==='unique-initial'?'First name and last initial':'Unique first name'
+   sourceRow:m.sourceRow,status:'matched',guest:m.guest,
+   matchMethod:methodLabels[m.method]||'Verified name match'
   }));
-  const review=eligibility.reviewRows.map(r=>({sourceRow:r.sourceRow,status:r.reason}));
+  const review=eligibility.reviewRows.map(r=>({
+   sourceRow:r.sourceRow,status:r.reason,
+   formHint:r.formHint||null,
+   guest:r.guest||null,
+   matchMethod:r.method?methodLabels[r.method]||null:null,
+   suggestedGuests:Array.isArray(r.suggestions)?r.suggestions.slice(0,3):[],
+   rsvpConfirmed:r.rsvpConfirmed===true,
+   paidConfirmed:r.paidConfirmed===true
+  }));
   // List the actual first names from the structured plus-one field and
   // the additional-plus-one field. Show non-qualifying entries as needing
   // review, rather than hiding their names behind "Response row" labels.
@@ -73,6 +87,9 @@ export async function onRequestGet({env}){
    eligibleParticipantCount:eligibility.eligible.length,
    matched,review,plusOneMatches,
    matchingReasons:eligibility.reasonCounts,
+   matchingMethods:eligibility.matched.reduce((counts,m)=>{
+    const key=m.method||'other';counts[key]=(counts[key]||0)+1;return counts;
+   },{}),
    lastImportedAt:formLastSync,lastGuestSync:guestLastSync,
    formConnectionFresh:!stale(formLastSync),
    guestConnectionFresh:!stale(guestLastSync),
