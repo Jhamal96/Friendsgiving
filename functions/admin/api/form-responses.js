@@ -1,7 +1,7 @@
 // One safe, consistent match projection for Guest List, Form responses, and teams.
 // The organizer pages have no login, so do not send phone, email, allergy
 // notes, or raw additional-plus-one free text.
-import {formEligible} from '../../_lib/team-eligibility.js';
+import {formEligible,firstName,nameKey} from '../../_lib/team-eligibility.js';
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(x,status=200)=>new Response(JSON.stringify(x),{status,headers});
 export async function onRequestGet({env}){
@@ -19,12 +19,45 @@ export async function onRequestGet({env}){
     m.method==='exact'?'Exact name':m.method==='unique-initial'?'First name and last initial':'Unique first name'
   }));
   const review=eligibility.reviewRows.map(r=>({sourceRow:r.sourceRow,status:r.reason}));
-  const plusOneMatches=(eligibility.groups||[]).flatMap(g=>(g.companions||[]).map(name=>({
-   sourceRow:g.sourceRow,status:'matched',guest:name
-  })));
+  // List the actual first names from the structured plus-one field and
+  // the additional-plus-one field. Show non-qualifying entries as needing
+  // review, rather than hiding their names behind "Response row" labels.
+  // Never return raw companion comments, shirt sizes, contact details, etc.
+  const latest=new Map();
+  for(const record of Array.isArray(form.records)?form.records:[]){
+   const key=nameKey(record?.name);
+   if(key)latest.set(key,record);
+  }
+  const eligibleByRow=new Map((eligibility.groups||[]).map(g=>[
+   g.sourceRow,new Set((g.companions||[]).map(nameKey))
+  ]));
+  const excluded=new Set(['knickie','dannell']);
+  const plusOneMatches=[],listed=new Set();
+  for(const record of latest.values()){
+   const registered=firstName(record.name);
+   const answer=String(record.plusOneYes||'').trim().toLowerCase();
+   const hasCompanion=answer?['yes','true','1'].includes(answer):!!record.plusOne;
+   if(!hasCompanion)continue;
+   const names=[record.plusOne,...String(record.additionalPlusOne||'').split(/[\\r\\n]+/)];
+   for(const text of names){
+    const companion=firstName(text),key=nameKey(companion);
+    if(!key||key===nameKey(registered)||excluded.has(key))continue;
+    const unique=String(record.sourceRow)+'|'+key;
+    if(listed.has(unique))continue;
+    listed.add(unique);
+    const qualified=eligibleByRow.get(record.sourceRow)?.has(key)===true;
+    plusOneMatches.push({
+     sourceRow:record.sourceRow,
+     status:qualified?'matched':'review',
+     guest:companion,
+     with:registered,
+     reason:qualified?'Eligible with respondent':'Not team-eligible; check Guest List status or duplicate names'
+    });
+   }
+  }
   matched.sort((a,b)=>a.guest.localeCompare(b.guest));
   review.sort((a,b)=>(a.sourceRow||0)-(b.sourceRow||0));
-  plusOneMatches.sort((a,b)=>a.guest.localeCompare(b.guest));
+  plusOneMatches.sort((a,b)=>a.with.localeCompare(b.with)||a.guest.localeCompare(b.guest));
   const isPublished=organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0);
   const guestLastSync=syncRow?.last_success_at||null,formLastSync=form.lastImportedAt||null;
   const stale=t=>!t||!Number.isFinite(Date.parse(t))||Date.now()-Date.parse(t)>30*60*1000;
@@ -35,8 +68,8 @@ export async function onRequestGet({env}){
    uniqueRespondents:eligibility.sourceCount,
    matchedCount:matched.length,
    needsReviewCount:review.length,
-   plusOneMatchedCount:plusOneMatches.length,
-   plusOneNeedsReviewCount:0,
+   plusOneMatchedCount:plusOneMatches.filter(x=>x.status==='matched').length,
+   plusOneNeedsReviewCount:plusOneMatches.filter(x=>x.status!=='matched').length,
    eligibleParticipantCount:eligibility.eligible.length,
    matched,review,plusOneMatches,
    matchingReasons:eligibility.reasonCounts,
