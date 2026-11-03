@@ -81,9 +81,11 @@ export async function onRequestPost({request,env}){
    const parent=canonical(g.primary);
    const lead=captainOwners.get(parent),placement=owners.get(parent);
    if(lead!==undefined&&placement!==undefined&&lead!==placement)return reply({error:'A captain cannot be a player on the opposing team: '+g.primary},400);
-   if(!g.plusOne)continue;
-   const child=canonical(g.plusOne),a=lead??placement,b=owners.get(child);
-   if(a!==undefined&&b!==undefined&&a!==b)return reply({error:'Keep '+g.plusOne+' with their participant on the same team.'},400);
+   const home=lead??placement;
+   for(const companion of Array.isArray(g.companions)?g.companions:[]){
+    const child=canonical(companion),partnerOwner=captainOwners.get(child)??owners.get(child);
+    if(home!==undefined&&partnerOwner!==undefined&&home!==partnerOwner)return reply({error:'Keep '+companion+' with '+g.primary+' on the same team.'},400);
+   }
   }
   for(const team of teams)for(const name of team.members){
    if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid and RSVP-confirmed form participants can be added: '+name},400);
