@@ -55,24 +55,30 @@ function randomizeTeams(){
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
  const captains=captainNames();
  if(captains.error){status.textContent='⚠ '+captains.error;return}
- if(!guests.length){status.textContent='No form participants have both Paid and RSVP marked Yes yet.';return}
- const confirmed=new Map();
- for(const guest of guests){const key=nameKey(guest);if(key&&!confirmed.has(key))confirmed.set(key,guest)}
- const available=Array.from(confirmed.entries()).filter(([key])=>!captains.names.has(key)).map(([,guest])=>guest);
- if(teams.some(t=>t.members.length)&&!confirm('Randomize the form participants with Paid = Yes and RSVP = Yes across the teams? Captains stay in place. This replaces the current private draft assignments.'))return;
- // Fisher-Yates with unbiased random indices; no captain can be chosen.
- for(let i=available.length-1;i>0;i--){const j=randomIndex(i+1);[available[i],available[j]]=[available[j],available[i]]}
- teams.forEach(t=>{t.members=[]});
- // Include each captain in team size when balancing, without duplicating them in members.
- const teamSize=teams.map(t=>nameKey(t.captain)?1:0);
- for(const guest of available){
-  const min=Math.min(...teamSize),choices=[];
-  for(let i=0;i<teamSize.length;i++)if(teamSize[i]===min)choices.push(i);
-  const index=choices[randomIndex(choices.length)];
-  teams[index].members.push(guest);teamSize[index]++;
+ if(!guests.length){status.textContent='No matched paid and RSVP-confirmed form names are available.';return}
+ if(teams.some(t=>t.members.length)&&!confirm('Randomize all eligible form participants? Captains stay on their own teams, and each +1 stays with the person who brought them. This replaces private draft assignments.'))return;
+ const groups=guestGroups.length?guestGroups.map(g=>({...g})):[...new Set(guests)].map(g=>({primary:g,alias:g,plusOne:null}));
+ const captainOwner=new Map();
+ teams.forEach((t,i)=>{const k=canonical(t.captain);if(k)captainOwner.set(k,i)});
+ const shuffled=groups.slice();
+ for(let i=shuffled.length-1;i>0;i--){const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]}
+ const next=teams.map(()=>[]),sizes=teams.map(t=>canonical(t.captain)?1:0),used=new Set();
+ for(const group of shuffled){
+  const key=canonical(group.primary);
+  if(!key||used.has(key))continue;
+  const members=[group.primary,...(group.plusOne?[group.plusOne]:[])];
+  const owner=captainOwner.get(key);
+  const index=owner!==undefined?owner:sizes.indexOf(Math.min(...sizes));
+  for(const name of members){
+   const id=nameKey(name);
+   if(!id||used.has(id)||captains.names.has(canonical(name)))continue;
+   next[index].push(name);sizes[index]++;used.add(id);
+  }
+  used.add(key);
  }
+ teams.forEach((team,i)=>{team.members=next[i]});
  markDirty();render();
- status.textContent='Randomized '+confirmed.size+' paid and confirmed form participants; captains stay put. Draft autosaves; select Publish teams when ready.';
+ status.textContent='Randomized eligible names. Captains stay on their teams, +1 companions stay with their person, and no duplicate players were added.';
 }
 function render(){
  cards.replaceChildren();
@@ -108,7 +114,7 @@ function openEditor(index){
  const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
  error.setAttribute('role','status');availableCount.setAttribute('aria-live','polite');
  const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>nameKey(m)===nameKey(name)));
- const reservedByCaptain=name=>teams.some((t,j)=>(j!==index||nameKey(t.captain)!==nameKey(draft.captain))&&nameKey(t.captain)&&nameKey(t.captain)===nameKey(name))||nameKey(draft.captain)===nameKey(name);
+ const reservedByCaptain=name=>teams.some((t,j)=>j!==index&&canonical(t.captain)&&canonical(t.captain)===canonical(name))||(canonical(draft.captain)&&canonical(draft.captain)===canonical(name));
  const availableGuests=()=>guests.filter(g=>!reservedByCaptain(g)&&!draft.members.some(m=>nameKey(m)===nameKey(g))&&!assignedElsewhere(g));
  function drawChoices(){
   const choices=availableGuests(),previous=memberSelect.value;
@@ -131,7 +137,18 @@ function openEditor(index){
  function addMember(member){
   if(!member){error.textContent='Choose a confirmed guest first.';return}
   if(!availableGuests().includes(member)){error.textContent='This guest is already assigned or no longer confirmed.';return}
-  draft.members.push(member);error.textContent='';drawMembers();drawChoices();
+  const group=groupFor(member);
+  const people=group?[group.primary,...(group.plusOne?[group.plusOne]:[])]:[member];
+  for(const person of people){
+   if(teams.some((t,j)=>j!==index&&((canonical(t.captain)&&canonical(t.captain)===canonical(person))||t.members.some(m=>nameKey(m)===nameKey(person))))){
+    error.textContent='This participant or their +1 belongs to a different captain or team.';return;
+   }
+  }
+  for(const person of people){
+   if(canonical(person)===canonical(draft.captain))continue;
+   if(!draft.members.some(m=>nameKey(m)===nameKey(person)))draft.members.push(person);
+  }
+  error.textContent='';drawMembers();drawChoices();
  }
  const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
  const randomButton=btn('🎲 Random Pick',()=>{
@@ -147,13 +164,13 @@ function openEditor(index){
  const submit=$('confirmTeam'),cancel=$('cancelTeam');
  submit.onclick=()=>{
  if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
- draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=draft.captain.trim();draft.members=uniqueMembers(draft.members);
- const key=nameKey(draft.captain);
+ draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=cleanName(draft.captain);draft.members=uniqueMembers(draft.members);
+ const key=canonical(draft.captain);
  if(key){
-  const conflict=teams.some((t,i)=>i!==index&&(nameKey(t.captain)===key||t.members.some(m=>nameKey(m)===key)));
+  const conflict=teams.some((t,i)=>i!==index&&(canonical(t.captain)===key||t.members.some(m=>canonical(m)===key)));
   if(conflict){error.textContent='This captain is already assigned to another team. Choose a different captain or remove their other assignment first.';return}
   // A captain belongs on their own team, never twice as an additional member.
-  draft.members=draft.members.filter(m=>nameKey(m)!==key);
+  draft.members=draft.members.filter(m=>canonical(m)!==key);
  }
  if(creating)teams.push(draft);else teams[index]=draft;
  modal.close();markDirty();render()
