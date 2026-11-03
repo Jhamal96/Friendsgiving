@@ -178,6 +178,18 @@ function openEditor(index){
  cancel.onclick=()=>modal.close();
  modal.showModal();area.querySelector('input').focus();
 }
+function updateSourceStatus(result){
+ const node=$('teamSourcesStatus'),info=result.syncSources||{};
+ if(!node)return;
+ const format=value=>value?new Date(value).toLocaleString():'no check recorded';
+ const recent=value=>value&&Number.isFinite(Date.parse(value))&&Date.now()-Date.parse(value)<30*60*1000;
+ node.textContent='Google Guest List: '+format(info.guestLastSuccessAt)+
+  ' · Google Form: '+format(info.formLastSuccessAt)+'. '+
+  (recent(info.guestLastSuccessAt)&&recent(info.formLastSuccessAt)
+   ?'Both automatic feeds are recent.'
+   :'One or both feeds may need checking in Settings.')+
+  (info.guestConflicts?' '+info.guestConflicts+' Guest List conflict(s) need review.':'');
+}
 async function start(){
  try{
   const response=await fetch('/admin/api/team-draft',{cache:'no-store'});
@@ -186,6 +198,7 @@ async function start(){
   if(!Array.isArray(result.teams)||!Array.isArray(result.publishedTeams)||!Number.isSafeInteger(result.revision))throw Error('Team draft data invalid.');
   teams=result.teams;guests=Array.isArray(result.guests)?result.guests:[];guestGroups=Array.isArray(result.guestGroups)?result.guestGroups:[];isPublished=result.isPublished===true;draftRevision=result.revision;
   const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
+  updateSourceStatus(result);
   if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
   publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
   $('addTeam').disabled=false;render();refreshPublishButton();
@@ -209,6 +222,7 @@ setInterval(async()=>{
   publishedBaseline=serial(result.publishedTeams||[]);
   const info=$('teamEligibilityInfo');
   if(info)info.textContent=guests.length+' eligible form participants (Paid: Yes · RSVP: Yes). '+(result.matchingReview||0)+' other names require review or do not yet qualify.';
+  updateSourceStatus(result);
   if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)||wasPublished!==isPublished){
    teams=result.teams;render();refreshPublishButton();
    status.textContent=isPublished?'✓ Published teams refreshed from form and payment changes.':'✓ Team draft refreshed; guest lookups remain unpublished.';
