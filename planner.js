@@ -10,7 +10,7 @@ async function saveChanges(){
  clearTimeout(autoTimer);autoTimer=null;
  if(!data||!dirty||blocked||saving)return;
  saving=true;const sentVersion=version;
- const snapshot={planning:data.planning.map(r=>r.slice()),guests:data.guests.map(r=>r.slice()),completion:{...data.completion}};
+ const snapshot={planning:data.planning.map(r=>r.slice()),guests:data.guests.map(r=>r.slice()),completion:{...data.completion},removedGuests:{...(data.removedGuests||{})}};
  status.textContent='Saving planner changes…';
  const btn=$('#save');btn.disabled=true;
  try{
@@ -36,7 +36,7 @@ function renderTabs(){
 function renderGuestSubTabs(){
  const root=$('#guestSubTabs');root.replaceChildren();
  const awaiting=guestEntries().entries.filter(({row})=>row[0].trim()&&!rsvpConfirmed(row)).length;
- [['all','All guests'],['not-rsvp','Not RSVP’d ('+awaiting+')']].forEach(([key,label])=>{
+ [['all','All guests'],['not-rsvp','Not RSVP’d ('+awaiting+')'],['removed','Removed ('+Object.keys(data?.removedGuests||{}).length+')']].forEach(([key,label])=>{
   const b=button(label,()=>{guestSubView=key;renderGuests()});
   b.setAttribute('aria-pressed',String(guestSubView===key));
   root.append(b);
@@ -52,6 +52,7 @@ function renderList(gi){const root=$('#lists');root.replaceChildren();const g=de
 // The Google Guest List is the active source of truth. Display a name once,
 // even when a duplicate copy exists in historical organizer data. Keep those
 // original rows intact for audit/reconciliation instead of deleting payments.
+function syncGuestKey(value){return String(value||'').trim().toLocaleLowerCase('en-US')}
 function guestKey(value){
  return String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
   .toLowerCase().replace(/[^a-z0-9+ ]/g,' ').replace(/\s+/g,' ').trim();
@@ -97,19 +98,50 @@ function editGuest(index){const isNew=index===null, draft=isNew?Array(7).fill(''
   error.textContent='That guest is already in the Guest List. Edit the existing entry instead of creating a duplicate.';return
  }
  if(isNew)data.guests.push(draft);else data.guests[index]=draft;filter='all';changed();dialog.close();dialog.remove();renderTabs();renderGuests()},'primary'),button('Cancel',()=>{dialog.close();dialog.remove()}));dialog.append(actions);dialog.addEventListener('cancel',()=>dialog.remove());document.body.append(dialog);dialog.showModal();grid.querySelector('input').focus()}
+function removeGuestEntry(index){
+ const row=data.guests[index];if(!row||!row[0]?.trim())return;
+ const name=String(row[0]).trim(),key=syncGuestKey(name);
+ if(!confirm('Remove “'+name+'” from the Friendsgiving planner and playing teams? The original Google Sheet will not change. You can restore this entry under Guests & Payments → Removed.'))return;
+ if(!data.removedGuests||typeof data.removedGuests!=='object')data.removedGuests={};
+ data.removedGuests[key]=row.slice();
+ data.guests=data.guests.filter(g=>syncGuestKey(g?.[0])!==key);
+ changed();renderGuestSubTabs();renderGuests();window.FriendsgivingSearch?.refresh();
+}
+function restoreGuestEntry(key){
+ const row=data.removedGuests?.[key];if(!Array.isArray(row)||row.length!==7)return;
+ if(!data.guests.some(r=>syncGuestKey(r[0])===key))data.guests.push(row.slice());
+ delete data.removedGuests[key];
+ changed();renderGuestSubTabs();renderGuests();window.FriendsgivingSearch?.refresh();
+}
 function renderGuests(){
  updatePaidTotal();
- const notRsvp=guestSubView==='not-rsvp',root=$('#guests'),totals=$('#totalEntries');
+ const notRsvp=guestSubView==='not-rsvp',removed=guestSubView==='removed',root=$('#guests'),totals=$('#totalEntries');
  renderGuestSubTabs();
  root.replaceChildren();totals.replaceChildren();
  $('#guestSectionTitle').textContent='Guests & payments';
- $('#guestSectionDescription').textContent=notRsvp
-  ?'Guests whose Google Guest List RSVP is marked No or has no confirmed response. Review their payment status, edit details, or confirm their RSVP. Website edits autosave to Cloudflare, not Google Sheets.'
+ $('#guestSectionDescription').textContent=removed
+  ?'Entries removed from Friendsgiving remain here for restoration. They are not deleted from Google Sheets and will not be reimported while removed.'
+  :notRsvp
+  ?'Guests without a confirmed RSVP. Confirm, edit, or remove unwanted entries; removed guests stay hidden from future Google Sheet syncs.'
   :'Mark payments, check RSVPs, and manage guest details. Blank payment statuses are shown as unknown.';
- $('#paidTotal').hidden=notRsvp;
- $('#filters').hidden=notRsvp;
- $('#addGuestToolbar').hidden=notRsvp;
+ $('#paidTotal').hidden=notRsvp||removed;
+ $('#filters').hidden=notRsvp||removed;
+ $('#addGuestToolbar').hidden=notRsvp||removed;
  $('#notRsvpInfo').hidden=!notRsvp;
+ if(removed){
+  const archived=Object.entries(data.removedGuests||{}).sort((a,b)=>String(a[1]?.[0]||a[0]).localeCompare(String(b[1]?.[0]||b[0])));
+  $('#counts').textContent=archived.length+' removed '+(archived.length===1?'entry':'entries')+' · Not shown in active guests or team assignments';
+  $('#sheetTotal').hidden=true;
+  if(!archived.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='No removed entries. Remove unwanted guests from Not RSVP’d or All Guests.';root.append(empty)}
+  for(const [key,row] of archived){
+   const card=document.createElement('article');card.className='guest';
+   const heading=document.createElement('h3');heading.textContent=String(row[0]||key);card.append(heading);
+   const note=document.createElement('p');note.className='muted';note.textContent='Removed from Friendsgiving · Original Google Sheet unchanged';card.append(note);
+   const actions=document.createElement('div');actions.className='guest-actions';
+   actions.append(button('Restore entry',()=>restoreGuestEntry(key),'primary'));card.append(actions);root.append(card);
+  }
+  return;
+ }
  const {entries,duplicateCount,conflicts}=guestEntries();
  let counts={all:0,paid:0,unpaid:0,unknown:0,waived:0};
  const awaiting=entries.filter(({row})=>row[0].trim()&&!rsvpConfirmed(row));
@@ -162,10 +194,7 @@ function renderGuests(){
     button('Clear payment status',()=>{row[4]='';changed();renderGuests()})
    );
   }
-  if(!notRsvp)acts.append(button('Remove entry',()=>{
-   if(!confirm('Remove this entry?'))return;
-   data.guests.splice(i,1);changed();renderTabs();renderGuests();
-  },'danger'));
+  if(!isTotal)acts.append(button('Remove entry',()=>removeGuestEntry(i),'danger'));
   card.append(acts);
   (isTotal?totals:root).append(card);
   if(!isTotal)shown++;
