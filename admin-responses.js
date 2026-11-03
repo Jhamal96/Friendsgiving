@@ -44,7 +44,8 @@ async function load(){
   fill('plusOneMatches',d.plusOneMatches||[],r=>{
    const name=r.guest||'Response row '+r.sourceRow;
    const paired=r.with?'With '+r.with+' · ':'';
-   const description=paired+(r.status==='matched'?'Eligible for teams':'Needs review / not yet eligible')+' · Form row '+r.sourceRow;
+   const state=r.status==='matched'?'Eligible for teams':'Needs review';
+   const description=paired+state+' · '+(r.reason||'Verify payment and RSVP')+' · Form row '+r.sourceRow;
    return item(name,description);
   });
   const fmt=value=>value?new Date(value).toLocaleString():'No successful check';
