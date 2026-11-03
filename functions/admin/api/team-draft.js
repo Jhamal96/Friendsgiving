@@ -41,8 +41,8 @@ export async function onRequestGet({request,env}){
    env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first(),
    env.FRIENDSGIVING_DB.prepare('SELECT last_success_at,last_conflicts FROM sheet_sync_status WHERE id=1').first()
   ]);
-  if(!draft||!current||!form)return reply({error:'Team drafts unavailable'},503);
-  const organizer=JSON.parse(current.content),formData=JSON.parse(form.data),matched=guestListEligible(organizer,formData);
+  if(!draft||!current)return reply({error:'Guest List or team drafts unavailable'},503);
+  const organizer=JSON.parse(current.content),formData=form?.data?JSON.parse(form.data):{records:[]},matched=guestListEligible(organizer,formData);
   const roles=readSquadRoles(organizer.squadRoles),candidates=new Map(),captains=new Set();
   for(const p of matched.eligible){
    const key=squadRoleKey(p.name);
@@ -95,9 +95,9 @@ export async function onRequestPost({request,env}){
    env.FRIENDSGIVING_DB.prepare('SELECT content FROM organizer_data WHERE id=1').first(),
    env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first()
   ]);
-  if(!organizer||!form)return reply({error:'Guest matching unavailable'},503);
+  if(!organizer)return reply({error:'Guest List unavailable'},503);
   const orgData=JSON.parse(organizer.content);
-  const matched=guestListEligible(orgData,JSON.parse(form.data));
+  const matched=guestListEligible(orgData,form?.data?JSON.parse(form.data):{records:[]});
   const roles=readSquadRoles(orgData.squadRoles);
   const eligible=new Set(matched.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   const canonical=name=>matched.aliases.get(eligibleKey(name))||eligibleKey(name);
