@@ -70,7 +70,9 @@
   if(flyer)rows.push({title:'Friendsgiving flyer',detail:'Date, time and location',group:'Event details',node:flyer});
   if(end)rows.push({title:'Closing message',detail:end.textContent,group:'Event details',node:end});
   if(teams&&!teams.hidden)rows.push({title:'Look up your team',detail:'Search your own name securely in Squad Assignments',group:'Team lookup',node:teams});
-  return rows.filter(row=>matches(query,row.title,row.detail)).map(({title,detail,group,node})=>({
+  // Organizer visibility settings can hide whole public sections. A search
+  // must never reveal or navigate to content that the host has hidden.
+  return rows.filter(row=>!row.node?.closest('[hidden]')&&matches(query,row.title,row.detail)).map(({title,detail,group,node})=>({
    title,detail:String(detail||'').trim().replace(/\s+/g,' ').slice(0,180),group,
    activate:()=>{navigate(node);if(node?.id==='teams')node.querySelector('#teamSearch')?.focus({preventScroll:true})}
   }));
