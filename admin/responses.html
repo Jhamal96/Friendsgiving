@@ -2,7 +2,7 @@
 <link rel="stylesheet" href="/responsive.css"><link rel="stylesheet" href="/admin-connections.css">
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;color:#f3f7ff;background:linear-gradient(#071424cc,#091526ed),url('/battlefield.png') center/cover fixed;font:16px/1.5 system-ui}
-main{max-width:1040px;margin:auto;padding:22px clamp(15px,4vw,35px) 90px}
+main{width:100%;max-width:none;margin:0 auto;padding:22px clamp(14px,2.5vw,42px) max(32px,env(safe-area-inset-bottom,0px))}
 a{color:#ffdf48}h1,h2{font-family:Impact,'Arial Narrow',system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}h1{font-size:clamp(2.2rem,7vw,4.6rem);line-height:1.05;margin:8px 0 16px}
 .admin-top{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;background:#0a1b2ded;padding:10px 0}
 .menu-wrap{position:relative}.menu-wrap summary{cursor:pointer;list-style:none;padding:10px 15px;border:1px solid #7290b1;background:#123251;border-radius:7px}.menu-list{position:absolute;left:0;top:100%;background:#153655;border:1px solid #6689ad;border-radius:9px;padding:10px;display:grid;gap:8px;width:min(310px,90vw);box-shadow:0 15px 35px #000c}.menu-list a{padding:7px;text-decoration:none;color:white}
@@ -12,14 +12,15 @@ button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #ff
 .intro{color:#baccdf;max-width:710px}.notice{border-left:4px solid #ffd630;background:#10233c;padding:15px 18px;border-radius:8px;margin:20px 0}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:25px 0}
 .stat{padding:18px;background:#0e2c4b;border:1px solid #5c80aa;border-top:4px solid #ffd630;border-radius:10px}.stat strong{display:block;color:#ffd630;font-size:2rem}.stat span{font-size:.84rem;color:#cbd9ea}
-.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
-.group{min-width:0;padding:20px;background:#102640eb;border:1px solid #476d96;border-radius:11px}
+.groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:clamp(12px,1.6vw,22px);width:100%;min-height:max(560px,68dvh)}
+.group{min-width:0;min-height:100%;padding:clamp(16px,1.8vw,26px);display:flex;flex-direction:column;gap:0;background:#102640eb;border:1px solid #476d96;border-radius:11px}
 .group h2{font-size:1.65rem;color:#ffd630;margin:0 0 12px}
-.group ul{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:410px;overflow:auto}
+.group ul{list-style:none;margin:0;padding:0;display:grid;align-content:start;gap:8px;flex:1 1 auto;min-height:0;max-height:none;overflow:visible}
 .group li{background:#193858;border-radius:8px;padding:12px 13px;display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:0;line-height:1.4;overflow-wrap:break-word;word-break:normal}
 .group li>span{display:block;width:100%;min-width:0;font-size:1rem;line-height:1.35;font-weight:700;overflow-wrap:break-word;word-break:normal;white-space:normal}
 .group small{display:block;width:100%;min-width:0;color:#b8d0e9;font-size:.79rem;line-height:1.45;overflow-wrap:break-word;word-break:normal;white-space:normal}dialog{width:min(95vw,730px);max-height:88dvh;overflow:auto;padding:24px;border:1px solid #7895b5;border-top:5px solid #ffd630;border-radius:12px;background:#0c2036;color:white}dialog::backdrop{background:#000b}
-@media(max-width:600px){.groups{grid-template-columns:1fr}.group{padding:15px}.stat strong{font-size:1.7rem}}
+@media(max-width:980px){.groups{grid-template-columns:repeat(2,minmax(0,1fr));min-height:0}.group{min-height:420px}.group:last-child{grid-column:1/-1;min-height:330px}}
+@media(max-width:640px){main{padding:16px 14px max(28px,env(safe-area-inset-bottom,0px))}.groups{grid-template-columns:minmax(0,1fr);gap:14px}.group,.group:last-child{grid-column:auto;min-height:0;padding:16px}.group ul{min-height:0}.stat strong{font-size:1.7rem}}
 </style><link rel="stylesheet" href="/admin-opening.css"><link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=20261102-exact-upload"><link rel="shortcut icon" href="/favicon.ico?v=20261102-exact-upload"><link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=20261102-exact-upload"><link rel="manifest" href="/admin/manifest.webmanifest?v=20261102-ios-separate"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="FG Admin"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"></head><body><div id="fgLoader" role="status" aria-label="Friendsgiving admin opening animation"><video id="fgOpeningVideo" src="/friendsgiving-intro.mp4" muted playsinline webkit-playsinline preload="metadata" aria-label="Friendsgiving opening video"></video><div class="intro-fallback" aria-hidden="true"><div class="halo-ring"></div><strong>MISSION CONTROL</strong><span>Initializing Friendsgiving</span></div><button class="skip" id="fgSkip" type="button">Skip intro</button></div><main>
 <header class="admin-top"><details class="menu-wrap"><summary>☰ Menu</summary><nav class="menu-list" aria-label="Organizer navigation"><a href="/admin/">Mission Control</a><a href="/admin/planner">Squad Planner</a><a href="/admin/teams">Team Assignments</a><a href="/admin/responses">Form Responses</a><a href="/">Friends' Page</a></nav></details><button id="responseSettingsButton" class="settings-button" type="button" aria-label="Connection settings">⚙</button></header>
 <p style="color:#ffd630;font-weight:800;letter-spacing:.12em">◆ FRIENDSGIVING / PRIVATE ORGANIZER WORKSPACE</p><h1>Response matching.</h1>
