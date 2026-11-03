@@ -87,10 +87,14 @@ export function formEligible(organizer,form){
  const baseline=organizer?.sheetSync?.status==='sheet_to_site_active'?organizer.sheetSync.baseline:null;
  const activeSource=baseline&&typeof baseline==='object'&&!Array.isArray(baseline)
   ?new Set(Object.keys(baseline).map(k=>String(k).trim().toLocaleLowerCase('en-US'))):null;
- const paymentRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>{
-  if(!Array.isArray(r)||!nameKey(r[0])||/\+\s*1(?:\s|$)/i.test(String(r[0])))return false;
+ const activeRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>{
+  if(!Array.isArray(r)||!nameKey(r[0]))return false;
   return !activeSource||activeSource.has(String(r[0]).trim().toLocaleLowerCase('en-US'));
  });
+ // An explicit "<inviter> +1" is payment for one companion, not an
+ // independent main participant or an unlimited number of companions.
+ const paymentRows=activeRows.filter(r=>!/\+\s*1(?:\s|$)/i.test(String(r[0])));
+ const companionPaymentRows=activeRows.filter(r=>/\+\s*1\s*$/i.test(String(r[0])));
  const responders=new Map();
  for(const r of Array.isArray(form?.records)?form.records:[]){
   const key=nameKey(r?.name);
@@ -100,7 +104,7 @@ export function formEligible(organizer,form){
  const forms=[...responders.values()],formFirst=new Map(),sheetFirst=new Map();
  for(const person of forms){const first=nameTokens(person.rawName)[0];if(first)formFirst.set(first,(formFirst.get(first)||0)+1)}
  for(const row of paymentRows){const first=nameTokens(row[0])[0];if(first)sheetFirst.set(first,(sheetFirst.get(first)||0)+1)}
- const review=[],usedSheet=new Set(),matched=[],seenFirst=new Set();
+ const review=[],usedSheet=new Set(),matched=[],sponsors=[],seenFirst=new Set();
  const plan=forms.map(person=>{
   const candidates=paymentRows.map((row,index)=>{
    const quality=compareNameRank(person.rawName,row[0],formFirst,sheetFirst);
@@ -108,9 +112,6 @@ export function formEligible(organizer,form){
   }).filter(Boolean);
   const rank=candidates.length?Math.min(...candidates.map(c=>c.rank)):null;
   const best=rank===null?[]:candidates.filter(c=>c.rank===rank);
-  // "Chris N" is not unique if the Guest List also has "Chris Noel".
-  // Do not automatically match an initial when another guest has the same
-  // first name and surname initial, even if their surname is fully written.
   const tokens=nameTokens(person.rawName),first=tokens[0],last=tokens.at(-1);
   const competingInitials=rank===2?paymentRows.filter(row=>{
    const parts=nameTokens(row[0]);
@@ -119,25 +120,19 @@ export function formEligible(organizer,form){
   const ambiguousInitial=rank===2&&competingInitials.length>1;
   return {person,rank,best,ambiguousInitial,competingInitials};
  });
- // Strong full-name matches win before surname-initial and unique-first fallback.
- // A guest may only be claimed by one response. Never infer fuzzy matches.
+ // Full-name matches take priority over initials and unique first names.
  for(let priority=0;priority<=3;priority++){
   const eligible=plan.filter(p=>p.rank===priority&&!p.ambiguousInitial&&p.best.length===1&&!usedSheet.has(p.best[0].index));
   const collisions=new Map();
-  for(const p of eligible){
-   const index=p.best[0].index;
-   collisions.set(index,(collisions.get(index)||0)+1);
-  }
+  for(const p of eligible)collisions.set(p.best[0].index,(collisions.get(p.best[0].index)||0)+1);
   for(const p of eligible){
    const hit=p.best[0];
    if(collisions.get(hit.index)!==1)continue;
-   p.claimed=hit;
-   usedSheet.add(hit.index);
+   p.claimed=hit;usedSheet.add(hit.index);
   }
  }
  for(const p of plan){
-  const person=p.person,hit=p.claimed;
-  const bits=nameTokens(person.rawName);
+  const person=p.person,hit=p.claimed,bits=nameTokens(person.rawName);
   const formHint=firstName(person.name)+(bits.length>=2?' '+bits.at(-1)[0].toUpperCase()+'.':'');
   const common={sourceRow:person.sourceRow,formHint};
   if(!hit){
@@ -149,23 +144,30 @@ export function formEligible(organizer,form){
    review.push({...common,reason,suggestions});
    continue;
   }
-  const row=hit.row;
-  if(!yes(row[3])||!yes(row[4])){
-   review.push({...common,reason:'payment-or-rsvp-pending',guest:cleanName(row[0]),method:hit.method,rsvpConfirmed:yes(row[3]),paidConfirmed:yes(row[4])});
+  const row=hit.row,first=nameTokens(person.name)[0];
+  const personInfo={
+   first:firstName(person.name),formName:person.name,sheetName:cleanName(row[0]),
+   method:hit.method,sourceRow:person.sourceRow,person,
+   rsvpConfirmed:yes(row[3]),paidConfirmed:yes(row[4])
+  };
+  if(personInfo.rsvpConfirmed)sponsors.push(personInfo);
+  if(!personInfo.rsvpConfirmed||!personInfo.paidConfirmed){
+   review.push({...common,reason:'payment-or-rsvp-pending',guest:cleanName(row[0]),
+    method:hit.method,rsvpConfirmed:personInfo.rsvpConfirmed,paidConfirmed:personInfo.paidConfirmed});
    continue;
   }
-  const first=nameTokens(person.name)[0];
   if(seenFirst.has(first)){
    review.push({...common,reason:'duplicate-first-name',guest:cleanName(row[0]),method:hit.method});
    continue;
   }
   seenFirst.add(first);
-  matched.push({first:firstName(person.name),formName:person.name,sheetName:cleanName(row[0]),method:hit.method,sourceRow:person.sourceRow,person});
+  matched.push(personInfo);
  }
- // Primary first names take priority over companion names, and each name
- // can appear on at most one team. Preserve full-name aliases for lookups.
+ // All primary participants have passed BOTH payment and RSVP checks.
+ // Independently paid companions need a sponsor whose Guest List RSVP is Yes,
+ // and an explicit Yes answer that includes their name on that Form.
  const primaryNames=new Set(matched.map(m=>firstKey(m.first)));
- const used=new Set(primaryNames),aliases=new Map(),eligible=[],groups=[];
+ const used=new Set(primaryNames),aliases=new Map(),eligible=[],groups=[],companionReview=[];
  for(const p of matched){
   const id=firstKey(p.first);
   aliases.set(nameKey(p.formName),id);
@@ -173,22 +175,111 @@ export function formEligible(organizer,form){
   aliases.set(id,id);
   eligible.push({name:p.first,alias:p.sheetName,method:p.method});
  }
- for(const p of matched){
-  const person=p.person,companions=[];
-  const marked=typeof person.plusOneYes==='string'&&person.plusOneYes.trim()?yes(person.plusOneYes):!!person.plusOne;
-  if(marked){
-   const extras=[person.plusOne,...extraCompanions(person.additionalPlusOne)];
-   for(const raw of extras){
-    const name=firstName(raw),k=firstKey(name);
-    if(!k||k===firstKey(p.first)||excludedCompanions.has(k)||used.has(k))continue;
-    used.add(k);companions.push(name);
-    eligible.push({name,alias:name,method:'named-companion',parent:firstKey(p.first)});
-    aliases.set(nameKey(raw),k);aliases.set(k,k);
-   }
+ const sponsorCount=new Map();
+ for(const p of sponsors)sponsorCount.set(firstKey(p.first),(sponsorCount.get(firstKey(p.first))||0)+1);
+ const allNamedCompanions=[];
+ for(const p of sponsors){
+  const person=p.person;
+  const rsvpMarked=typeof person.plusOneYes==='string'&&person.plusOneYes.trim()
+   ?yes(person.plusOneYes):!!person.plusOne;
+  if(!rsvpMarked)continue;
+  const names=[person.plusOne,...String(person.additionalPlusOne||'').split(/[\r\n]+/)];
+  const local=new Set();
+  for(const raw of names){
+   const name=firstName(raw),key=firstKey(name);
+   if(!key||key===firstKey(p.first)||excludedCompanions.has(key)||local.has(key))continue;
+   local.add(key);
+   allNamedCompanions.push({owner:p,name,key,rawName:cleanName(raw)});
   }
-  groups.push({primary:p.first,alias:p.sheetName,sourceRow:p.sourceRow,companions});
  }
- return {eligible,groups,aliases,matched:matched.map(m=>({sourceRow:m.sourceRow,guest:m.sheetName,first:m.first,method:m.method})),reviewRows:review,reviewCount:review.length,reasonCounts:review.reduce((o,v)=>(o[v.reason]=(o[v.reason]||0)+1,o),{}),sourceCount:forms.length};
+ const companionFrequency=new Map();
+ for(const c of allNamedCompanions)companionFrequency.set(c.key,(companionFrequency.get(c.key)||0)+1);
+ const companionGuestFrequency=new Map();
+ for(const r of paymentRows){
+  const key=firstKey(r[0]);
+  companionGuestFrequency.set(key,(companionGuestFrequency.get(key)||0)+1);
+ }
+ const consumedPayment=new Set(),consumedPlus=new Set();
+ const confirmedCompanions=new Map();
+ // 1. A named Guest List row is authoritative. An unpaid named row cannot
+ //    be overridden by an unrelated "<inviter> +1" payment.
+ // 2. Only one named companion can consume each paid "<inviter> +1" row.
+ // 3. Repeated first names, competing matches, and uncertain sponsor links
+ //    are held for review, never assigned to the wrong player.
+ for(const c of allNamedCompanions){
+  const p=c.owner,key=c.key,ownerKey=firstKey(p.first);
+  const common={sourceRow:p.sourceRow,guest:c.name,with:p.first};
+  if(sponsorCount.get(ownerKey)!==1){
+   companionReview.push({...common,reason:'ambiguous-sponsor'});
+   continue;
+  }
+  if(companionFrequency.get(key)>1||used.has(key)){
+   companionReview.push({...common,reason:'duplicate-companion'});
+   continue;
+  }
+  const direct=paymentRows.map((row,index)=>({row,index})).filter(x=>{
+   if(firstKey(x.row[0])!==key)return false;
+   const raw=c.rawName,source=x.row[0];
+   if(nameKey(raw)===nameKey(source))return true;
+   const a=nameTokens(raw),b=nameTokens(source);
+   if(a.length>=2&&b.length>=2&&a[0]===b[0]&&a.at(-1)[0]===b.at(-1)[0]&&
+      (a.at(-1)===b.at(-1)||a.at(-1).length===1||b.at(-1).length===1))return true;
+   return companionGuestFrequency.get(key)===1&&companionFrequency.get(key)===1;
+  });
+  if(direct.length>1){
+   companionReview.push({...common,reason:'ambiguous-payment'});
+   continue;
+  }
+  let payment=null;
+  if(direct.length===1){
+   if(!yes(direct[0].row[4])){
+    companionReview.push({...common,reason:'companion-payment-pending'});
+    continue;
+   }
+   if(consumedPayment.has(direct[0].index)){
+    companionReview.push({...common,reason:'duplicate-payment'});
+    continue;
+   }
+   consumedPayment.add(direct[0].index);
+   payment='individual-guest';
+  }else{
+   const ownerAliases=new Set([nameKey(p.sheetName),firstKey(p.sheetName),nameKey(p.formName),firstKey(p.formName)]);
+   const pooled=companionPaymentRows.map((row,index)=>({row,index})).filter(x=>{
+    const holder=nameKey(String(x.row[0]).replace(/\+\s*1\s*$/i,''));
+    return ownerAliases.has(holder);
+   });
+   if(pooled.length!==1){
+    companionReview.push({...common,reason:pooled.length>1?'ambiguous-payment':'companion-payment-pending'});
+    continue;
+   }
+   if(!yes(pooled[0].row[4])||consumedPlus.has(pooled[0].index)){
+    companionReview.push({...common,reason:'companion-payment-pending'});
+    continue;
+   }
+   consumedPlus.add(pooled[0].index);
+   payment='inviter-plus-one';
+  }
+  used.add(key);
+  eligible.push({name:c.name,alias:c.name,method:'paid-companion',parent:ownerKey,payment});
+  aliases.set(key,key);
+  const items=confirmedCompanions.get(p.sourceRow)||[];
+  items.push(c.name);confirmedCompanions.set(p.sourceRow,items);
+ }
+ // A sponsor may be RSVP-confirmed but not have paid for themselves. Their
+ // PAID companion remains eligible, without adding an unpaid sponsor.
+ for(const p of sponsors){
+  const names=confirmedCompanions.get(p.sourceRow)||[];
+  if(!names.length&&!primaryNames.has(firstKey(p.first)))continue;
+  groups.push({primary:p.first,alias:p.sheetName,sourceRow:p.sourceRow,companions:names});
+ }
+ return {
+  eligible,groups,aliases,
+  matched:matched.map(m=>({sourceRow:m.sourceRow,guest:m.sheetName,first:m.first,method:m.method})),
+  reviewRows:review,reviewCount:review.length,
+  reasonCounts:review.reduce((o,v)=>(o[v.reason]=(o[v.reason]||0)+1,o),{}),
+  companionReview,companionReviewCount:companionReview.length,
+  sourceCount:forms.length
+ };
 }
 
 export function balanceTeams(input,eligibility){
