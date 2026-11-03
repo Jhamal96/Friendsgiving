@@ -43,7 +43,7 @@ function input(label,value,limit,change){const l=el('label','edit-label',label),
 function cleanName(name){return String(name||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').replace(/\s+/g,' ').trim()}
 function nameKey(name){const s=String(name||'').trim(),plus=/\+\s*1\s*$/.test(s);return cleanName(plus?s.replace(/\+\s*1\s*$/,''):s).toLowerCase()+(plus?' +1':'')}
 function canonical(name){const k=nameKey(name);const group=guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k);return group?nameKey(group.primary):k}
-function groupFor(name){const k=nameKey(name);return guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k||nameKey(g.plusOne)===k)}
+function groupFor(name){const k=nameKey(name);return guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k||(Array.isArray(g.companions)&&g.companions.some(n=>nameKey(n)===k)))}
 function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=nameKey(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
 function captainNames(){
  const names=new Map();
@@ -66,7 +66,7 @@ function randomizeTeams(){
  for(const group of shuffled){
   const key=canonical(group.primary);
   if(!key||used.has(key))continue;
-  const members=[group.primary,...(group.plusOne?[group.plusOne]:[])];
+  const members=[group.primary,...(Array.isArray(group.companions)?group.companions:[])];
   const owner=captainOwner.get(key);
   const index=owner!==undefined?owner:sizes.indexOf(Math.min(...sizes));
   for(const name of members){
@@ -138,7 +138,7 @@ function openEditor(index){
   if(!member){error.textContent='Choose a confirmed guest first.';return}
   if(!availableGuests().includes(member)){error.textContent='This guest is already assigned or no longer confirmed.';return}
   const group=groupFor(member);
-  const people=group?[group.primary,...(group.plusOne?[group.plusOne]:[])]:[member];
+  const people=group?[group.primary,...(Array.isArray(group.companions)?group.companions:[])]:[member];
   for(const person of people){
    if(teams.some((t,j)=>j!==index&&((canonical(t.captain)&&canonical(t.captain)===canonical(person))||t.members.some(m=>nameKey(m)===nameKey(person))))){
     error.textContent='This participant or their +1 belongs to a different captain or team.';return;
