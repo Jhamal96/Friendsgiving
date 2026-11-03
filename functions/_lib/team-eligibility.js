@@ -21,7 +21,7 @@ export function formEligible(organizer,form){
  for(const r of Array.isArray(form?.records)?form.records:[]){
   const key=nameKey(r?.name);
   if(!key)continue;
-  responders.set(key,{name:cleanName(r.name),key,plusOne:cleanName(r.plusOne),plusOneYes:r.plusOneYes,additionalPlusOne:r.additionalPlusOne||''});
+  responders.set(key,{name:cleanName(r.name),key,sourceRow:Number.isInteger(r.sourceRow)?r.sourceRow:null,plusOne:cleanName(r.plusOne),plusOneYes:r.plusOneYes,additionalPlusOne:r.additionalPlusOne||''});
  }
  const forms=[...responders.values()],formFirst=new Map(),sheetFirst=new Map();
  for(const r of forms){const k=firstKey(r.name);formFirst.set(k,(formFirst.get(k)||0)+1)}
@@ -41,13 +41,13 @@ export function formEligible(organizer,form){
    method='unique-first';
   }
   if(matches.length!==1||usedSheet.has(matches[0].i)){
-   review.push({reason:matches.length>1?'ambiguous-name':matches.length===1?'duplicate-match':'no-match'});continue;
+   review.push({sourceRow:person.sourceRow,reason:matches.length>1?'ambiguous-name':matches.length===1?'duplicate-match':'no-match'});continue;
   }
   const hit=matches[0],row=hit.r;usedSheet.add(hit.i);
-  if(!yes(row[3])||!yes(row[4])){review.push({reason:'payment-or-rsvp-pending'});continue}
-  if(seenFirst.has(first)){review.push({reason:'duplicate-first-name'});continue}
+  if(!yes(row[3])||!yes(row[4])){review.push({sourceRow:person.sourceRow,reason:'payment-or-rsvp-pending'});continue}
+  if(seenFirst.has(first)){review.push({sourceRow:person.sourceRow,reason:'duplicate-first-name'});continue}
   seenFirst.add(first);
-  matched.push({first:firstName(person.name),formName:person.name,sheetName:cleanName(row[0]),method,person});
+  matched.push({first:firstName(person.name),formName:person.name,sheetName:cleanName(row[0]),method,sourceRow:person.sourceRow,person});
  }
  // Primary first names take priority over companion names, and each name
  // can appear on at most one team. Preserve full-name aliases for lookups.
@@ -75,7 +75,7 @@ export function formEligible(organizer,form){
   }
   groups.push({primary:p.first,alias:p.sheetName,companions});
  }
- return {eligible,groups,aliases,reviewCount:review.length,reasonCounts:review.reduce((o,v)=>(o[v.reason]=(o[v.reason]||0)+1,o),{}),sourceCount:forms.length};
+ return {eligible,groups,aliases,matched:matched.map(m=>({sourceRow:m.sourceRow,guest:m.sheetName,first:m.first,method:m.method})),reviewRows:review,reviewCount:review.length,reasonCounts:review.reduce((o,v)=>(o[v.reason]=(o[v.reason]||0)+1,o),{}),sourceCount:forms.length};
 }
 
 export function balanceTeams(input,eligibility){
