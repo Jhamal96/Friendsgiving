@@ -25,7 +25,7 @@ export async function onRequestPost({request,env}){
   const fields=['name','shirt','plusOne','plusOneShirt','children','athletic'],items=[];
   for(const r of payload.records){
    if(!r||!Number.isInteger(r.sourceRow)||r.sourceRow<2||r.sourceRow>10000||fields.some(k=>typeof r[k]!=='string'||r[k].length>300)||!r.name.trim())return json({error:'Invalid response fields'},400);
-   items.push({sourceRow:r.sourceRow,...Object.fromEntries(fields.map(k=>[k,r[k].trim()]))});
+   items.push({sourceRow:r.sourceRow,...Object.fromEntries(fields.map(k=>[k,r[k].trim()])),plusOneYes:typeof r.plusOneYes==='string'?r.plusOneYes.trim().slice(0,30):''});
   }
   const existing=await env.FRIENDSGIVING_DB.prepare('SELECT revision FROM friendsgiving_form_responses WHERE id=1').first();
   if(!existing)return json({error:'Form table unavailable'},503);
