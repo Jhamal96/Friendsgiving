@@ -78,9 +78,11 @@ export async function onRequestPost({request,env}){
   }
   for(let i=0;i<teams.length;i++)for(const name of teams[i].members)owners.set(canonical(name),i);
   for(const g of matched.groups){
+   const parent=canonical(g.primary);
+   const lead=captainOwners.get(parent),placement=owners.get(parent);
+   if(lead!==undefined&&placement!==undefined&&lead!==placement)return reply({error:'A captain cannot be a player on the opposing team: '+g.primary},400);
    if(!g.plusOne)continue;
-   const parent=canonical(g.primary),child=canonical(g.plusOne);
-   const a=captainOwners.get(parent)??owners.get(parent),b=owners.get(child);
+   const child=canonical(g.plusOne),a=lead??placement,b=owners.get(child);
    if(a!==undefined&&b!==undefined&&a!==b)return reply({error:'Keep '+g.plusOne+' with their participant on the same team.'},400);
   }
   for(const team of teams)for(const name of team.members){
