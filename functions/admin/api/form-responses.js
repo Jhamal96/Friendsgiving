@@ -1,7 +1,7 @@
 // One safe, consistent match projection for Guest List, Form responses, and teams.
 // The organizer pages have no login, so do not send phone, email, allergy
 // notes, or raw additional-plus-one free text.
-import {formEligible,firstName,nameKey} from '../../_lib/team-eligibility.js';
+import {formEligible,guestListEligible,firstName,nameKey} from '../../_lib/team-eligibility.js';
 import {responseUpdateSnapshot} from '../../_lib/response-update-snapshot.js';
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(x,status=200)=>new Response(JSON.stringify(x),{status,headers});
@@ -16,6 +16,8 @@ export async function onRequestGet({env}){
   if(!formRow||!guestRow)return reply({error:'Form and guest sources are not initialized'},503);
   const form=JSON.parse(formRow.data),organizer=JSON.parse(guestRow.content);
   const eligibility=formEligible(organizer,form);
+  const teamEligibility=guestListEligible(organizer,form);
+  const qualifiedTeamNames=new Set(teamEligibility.eligible.map(p=>nameKey(firstName(p.name))));
   const methodLabels={
    'exact':'Exact full name',
    'first-last':'First and surname (middle name ignored)',
@@ -69,7 +71,7 @@ export async function onRequestGet({env}){
     listed.add(unique);
     const paymentKey=String(record.sourceRow)+'|'+key;
     const paidThrough=paidByRowAndName.get(paymentKey)||null;
-    const qualified=!!paidThrough;
+    const qualified=qualifiedTeamNames.has(nameKey(companion));
     const inviterReview=sponsorReviewByRow.get(record.sourceRow);
     const reviewCode=companionReviewByRowAndName.get(paymentKey)||
      (inviterReview?.reason==='no-match'||inviterReview?.reason==='ambiguous-name'
@@ -92,8 +94,8 @@ export async function onRequestGet({env}){
      with:registered,
      paidThrough,
      reason:qualified
-      ?(paidThrough==='inviter-plus-one'?'Paid via inviter +1 entry; RSVP confirmed':'Companion paid; inviter RSVP confirmed')
-      :(issues[reviewCode]||'Payment or RSVP needs review')
+      ?'Eligible through their own paid and RSVP-confirmed Guest List entry'
+      :'Their own Guest List entry must have both RSVP = Yes and Paid = Yes, without an asterisk (*)'
     });
    }
   }
@@ -111,13 +113,19 @@ export async function onRequestGet({env}){
     else if(!assigned.has(key))assigned.set(key,team.name);
    }
   }
-  for(const entry of matched)entry.team=assigned.get(nameKey(firstName(entry.guest)))||null;
+  const captainNames=new Set((teams||[]).map(t=>nameKey(firstName(t.captain))).filter(Boolean));
+  for(const entry of matched){
+   const name=nameKey(firstName(entry.guest));
+   entry.teamEligible=qualifiedTeamNames.has(name);
+   entry.isCaptain=captainNames.has(name);
+   entry.team=entry.teamEligible||entry.isCaptain?assigned.get(name)||null:null;
+  }
   for(const entry of plusOneMatches){
-   if(entry.status==='matched')entry.team=assigned.get(nameKey(entry.guest))||null;
-   else entry.team=null;
+   entry.teamEligible=qualifiedTeamNames.has(nameKey(entry.guest));
+   entry.team=entry.teamEligible?assigned.get(nameKey(entry.guest))||null:null;
   }
   const changeSnapshot=await responseUpdateSnapshot({
-   organizer,form,eligibility,teams,isPublished
+   organizer,form,eligibility,teamEligibility,teams,isPublished
   });
   matched.sort((a,b)=>a.guest.localeCompare(b.guest));
   review.sort((a,b)=>(a.sourceRow||0)-(b.sourceRow||0));
@@ -133,7 +141,8 @@ export async function onRequestGet({env}){
    needsReviewCount:review.length,
    plusOneMatchedCount:plusOneMatches.filter(x=>x.status==='matched').length,
    plusOneNeedsReviewCount:plusOneMatches.filter(x=>x.status!=='matched').length,
-   eligibleParticipantCount:eligibility.eligible.length,
+   eligibleParticipantCount:teamEligibility.eligible.length,
+   teamEligibilitySource:'Guest List (RSVP = Yes and Paid = Yes; * excluded)',
    matched,review,plusOneMatches,changeSnapshot,
    matchingReasons:eligibility.reasonCounts,
    matchingMethods:eligibility.matched.reduce((counts,m)=>{
