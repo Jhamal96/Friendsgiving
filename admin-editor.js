@@ -9,6 +9,26 @@ const oldToNew=[0,1,2,4,5];
 function normalizeOrder(order){const good=(x,n)=>Array.isArray(x)&&x.length===n&&new Set(x).size===n&&x.every(i=>Number.isInteger(i)&&i>=0&&i<n);if(good(order,6))return order.slice();if(good(order,5)){const converted=order.map(i=>oldToNew[i]),after=converted.indexOf(2);converted.splice(after+1,0,3);return converted}return [0,1,2,3,4,5]}
 function normalizeHidden(hidden){if(!Array.isArray(hidden))return Array(6).fill(false);return hidden.length===5?[hidden[0],hidden[1],hidden[2],false,hidden[3],hidden[4]].map(Boolean):Array.from({length:6},(_,i)=>hidden[i]===true)}
 
+// Search the editable mission text already loaded into Mission Control.
+function missionSearch(query,matches){
+ const found=[];
+ for(let i=0;i<fields.length;i++){
+  const input=document.querySelector('#fields [data-idx="'+i+'"]');
+  if(!input)continue;
+  const label=fields[i][0],value=String(input.value||'');
+  if(!matches(query,label,value))continue;
+  found.push({title:label,group:'Mission Control',
+   detail:value.trim().slice(0,185)||'Empty field · select to edit',
+   activate:()=>{
+    window.FriendsgivingSearch?.navigate(input.closest('label'));
+    input.focus({preventScroll:true});
+   }
+  });
+ }
+ return found;
+}
+window.FriendsgivingSearch?.register(missionSearch);
+
 (async()=>{
  const msg=document.querySelector('#message'),form=document.querySelector('#editor');
  const dlg=document.querySelector('#pageSettings'),open=document.querySelector('#openSettings'),close=document.querySelector('#closeSettings');
@@ -86,6 +106,7 @@ function normalizeHidden(hidden){if(!Array.isArray(hidden))return Array(6).fill(
    el.dataset.idx=i;el.addEventListener('input',()=>schedule(900));label.append(el);document.querySelector('#fields').append(label);
   });
   initialized=true;open.disabled=false;status('Autosave is on · Changes are saved as you edit');
+  window.FriendsgivingSearch?.refresh();
   open.addEventListener('click',()=>dlg.showModal());
   close.addEventListener('click',doneSettings);
   dlg.addEventListener('cancel',e=>{e.preventDefault();doneSettings()});
