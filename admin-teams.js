@@ -180,8 +180,20 @@ function render(){
  if(!teams.length)cards.append(el('p','empty','No teams in your draft yet. Create a team to begin.'));
  teams.forEach((team,index)=>{
   const card=el('article','team-card');
-  const h=el('h2','',team.name||'New team');card.append(h);
+  // Count unique assigned players in this box; the captain counts once.
+  const captainKey=nameKey(team.captain);
+  const memberKeys=new Set((team.members||[]).map(nameKey).filter(key=>key&&key!==captainKey));
+  const playerCount=memberKeys.size+(captainKey?1:0);
+  const heading=el('div','team-card-heading');
+  heading.append(el('h2','',team.name||'New team'));
+  const count=el('div','team-player-count');
+  count.setAttribute('aria-label',playerCount+' '+(playerCount===1?'player':'players')+' assigned to '+(team.name||'this team'));
+  count.append(el('strong','team-player-number',String(playerCount)));
+  count.append(el('span','team-player-word',playerCount===1?'PLAYER':'PLAYERS'));
+  heading.append(count);card.append(heading);
   if(team.caption)card.append(el('p','team-caption',team.caption));
+  const details=memberKeys.size+' '+(memberKeys.size===1?'member':'members')+(captainKey?' + 1 captain':' · captain not assigned');
+  card.append(el('p','team-count-details',details));
   card.append(el('p','muted','Captain: '+(team.captain||'To be announced')));
   const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'No additional players yet'));card.append(roster);
   const actions=el('div','team-actions');
@@ -191,7 +203,7 @@ function render(){
   card.append(actions);cards.append(card);
  });
  $('randomizeTeams').disabled=rolesBusy||teams.length<2||!guests.length;
- $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+t.members.length+(nameKey(t.captain)?1:0),0)+' assigned people (captains included)';
+ $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+new Set([t.captain,...t.members].map(nameKey).filter(Boolean)).size,0)+' assigned people (captains included)';
 }
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
 function openEditor(index){
