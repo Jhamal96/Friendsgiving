@@ -239,10 +239,10 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes paid and RSVP-confirmed guests plus paid named companions, each drawn independently.':'Choose eligible guests and paid companions with inviter RSVPs. Each player can be placed on either team, or use Randomize Teams to reshuffle.');area.append(caption);
+ const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes players with both RSVP = Yes and Paid = Yes on the Guest List.':'Choose a Guest List player with both Paid = Yes and RSVP = Yes. Names marked * and non-playing roles are not selectable. Use Randomize Teams to reshuffle.');area.append(caption);
  if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
- memberSelect.setAttribute('aria-label','Form participants who are paid and RSVP confirmed');
+ memberSelect.setAttribute('aria-label','Guest List players with RSVP Yes and Paid Yes');
  const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
  error.setAttribute('role','status');availableCount.setAttribute('aria-live','polite');
  const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>nameKey(m)===nameKey(name)));
@@ -251,7 +251,7 @@ function openEditor(index){
  function drawChoices(){
   const choices=availableGuests(),previous=memberSelect.value;
   memberSelect.replaceChildren();
-  const placeholder=el('option','','Select an eligible player or paid +1…');placeholder.value='';memberSelect.append(placeholder);
+  const placeholder=el('option','','Select a paid, RSVP-confirmed Guest List player…');placeholder.value='';memberSelect.append(placeholder);
   const plusKeys=paidPlusOneKeys();
   choices.forEach(g=>{
    const option=el('option','',plusKeys.has(canonical(g))?'🎟️ Paid +1 · '+g:g);
@@ -273,8 +273,8 @@ function openEditor(index){
   });
  }
  function addMember(member){
-  if(!member){error.textContent='Choose a confirmed guest first.';return}
-  if(!availableGuests().includes(member)){error.textContent='This guest is already assigned or no longer confirmed.';return}
+  if(!member){error.textContent='Choose a Guest List player confirmed as paid and RSVP Yes.';return}
+  if(!availableGuests().includes(member)){error.textContent='This guest is already assigned, marked *, not Playing, or no longer Paid and RSVP-confirmed.';return}
   // Members, including named plus-ones, may be assigned to separate teams.
   // Do not silently move the person's inviter or any other companion.
   if(canonical(member)!==canonical(draft.captain)&&!draft.members.some(m=>nameKey(m)===nameKey(member)))draft.members.push(member);
@@ -283,7 +283,7 @@ function openEditor(index){
  const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
  const randomButton=btn('🎲 Random Pick',()=>{
   const available=availableGuests();
-  if(!available.length){error.textContent='No unassigned eligible guests or paid companions are available.';return}
+  if(!available.length){error.textContent='No unassigned Guest List players with Paid = Yes and RSVP = Yes are available.';return}
   // Use the browser's random values, avoiding modulo bias for a fair random pick.
   const max=0x100000000,limit=Math.floor(max/available.length)*available.length;
   let value;do{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);value=bytes[0]}while(value>=limit);
@@ -344,8 +344,8 @@ function updateSourceStatus(result){
  if(!node)return;
  const format=value=>value?new Date(value).toLocaleString():'no check recorded';
  const recent=value=>value&&Number.isFinite(Date.parse(value))&&Date.now()-Date.parse(value)<30*60*1000;
- node.textContent='Google Guest List: '+format(info.guestLastSuccessAt)+
-  ' · Google Form: '+format(info.formLastSuccessAt)+'. '+
+ node.textContent='Google Guest List (team source): '+format(info.guestLastSuccessAt)+
+  ' · Google Form (companion labels only): '+format(info.formLastSuccessAt)+'. '+
   (recent(info.guestLastSuccessAt)&&recent(info.formLastSuccessAt)
    ?'Both automatic feeds are recent.'
    :'One or both feeds may need checking in Settings.')+
@@ -365,7 +365,7 @@ async function start(){
   roleCaptains=new Set(Array.isArray(result.roleCaptains)?result.roleCaptains:[]);
   roleRevision=Number.isSafeInteger(result.roleRevision)?result.roleRevision:null;
   renderRoles();
-  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' eligible people: primary guests paid and RSVP-confirmed, plus named companions paid with inviter RSVP. '+(result.companionNeedsReview||0)+' companions need payment or RSVP review.';
+  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' confirmed Guest List players (RSVP = Yes and Paid = Yes, excluding non-playing roles) · '+(result.markedExcluded||0)+' starred Guest List entries excluded · '+(result.paymentPending||0)+' RSVP-confirmed entries waiting for payment · '+(result.rsvpPending||0)+' paid entries waiting for RSVP. No Form submission required.';
   updateSourceStatus(result);
   if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
   publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
@@ -400,7 +400,7 @@ setInterval(async()=>{
   updateSourceStatus(result);
   if(previousRevision!==draftRevision||previousGuests!==JSON.stringify(guests)||wasPublished!==isPublished||previousRoleRevision!==roleRevision){
    teams=result.teams;render();refreshPublishButton();
-   status.textContent=isPublished?'✓ Published teams refreshed from form and payment changes.':'✓ Team draft refreshed; guest lookups remain unpublished.';
+   status.textContent=isPublished?'✓ Published teams refreshed from Guest List RSVP/payment changes.':'✓ Team draft refreshed from Guest List; guest lookups remain unpublished.';
   }
  }catch{}
 },60000);
