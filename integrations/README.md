@@ -11,7 +11,9 @@ Synced fields: Guest name, Size Shirt, Amount, RSVP, Paid, Paid Via, Shirt Size.
 - Sheet updates merge field-by-field into the website. Website-only changes are preserved. If both locations change the same cell, the website value is preserved and a conflict is recorded.
 - A change to the Google Sheet can be sent by its installable edit trigger; a scheduled trigger checks every five minutes for changes, including updates from forms that might not fire edit triggers.
 - Guest records not present in the Sheet are preserved, not automatically deleted.
-- Team assignments, food and games remain intact.
+- Team captains, food, and games remain intact. Whenever a guest's RSVP or Paid status changes, the site recomputes eligibility against the latest Google Form responses, adjusts private team drafts, and updates an already-published lineup. Unpublished teams stay hidden.
+- Only names present in the form and matching a unique Guest List row with both RSVP and Paid set to Yes are eligible as main participants. Named companions accompany their matched participant; team displays use first names and exclude the specifically nonparticipating companions.
+- The organizer **Response Matching** and **Team Assignments** pages share the same eligibility rules and show sync status from both sources.
 - The link currently synchronizes **Google Sheets → website**. Website → Google Sheets writeback requires an additional Google-authorized outbound connection and is not yet enabled.
 
 ## Activate in Google Sheets (one time)
@@ -23,6 +25,11 @@ Synced fields: Guest name, Size Shirt, Amount, RSVP, Paid, Paid Via, Shirt Size.
 5. Check **Executions** for success. It should run immediately once and install edit and five-minute time-based triggers.
 6. Make a non-destructive test update (e.g. alter an RSVP or Paid value and restore it) and verify on the [Squad Planner](https://ajd-friendsgiving.pages.dev/admin/planner).
 7. To disable automatic updates, run `stopFriendsgivingSync`.
+
+
+## Form responses integration
+
+A separate authorized Apps Script installed in the original [HALO FRIENDSGIVING FIELD DAY response sheet](https://docs.google.com/spreadsheets/d/1JRPCoLs2pB44-WyiGvACL0nnDVeiyj_NrgHS8cYrluY/edit) sends the names, Yes/No companion choice, and named companions to `POST /api/form-sync`. See [FORM-RESPONSES.md](./FORM-RESPONSES.md) for installation and data-minimization details. Both scripts are independent; changing code in GitHub does not update the copy saved in Google Apps Script automatically. Keep both scripts' scheduled triggers enabled.
 
 ## Data safety
 
