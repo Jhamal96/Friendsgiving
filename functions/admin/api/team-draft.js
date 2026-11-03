@@ -1,4 +1,5 @@
-import {reconcileTeams,formEligible,nameKey as eligibleKey,cleanName} from '../../_lib/team-eligibility.js';
+import {reconcileTeams,formEligible,nameKey as eligibleKey,cleanName,firstName} from '../../_lib/team-eligibility.js';
+import {readSquadRoles,squadRoleKey} from '../../_lib/squad-roles.js';
 // Admin team drafts are stored separately from published teams.
 // Public /api/teams reads only organizer_data.teams, never team_drafts.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -42,9 +43,22 @@ export async function onRequestGet({request,env}){
   ]);
   if(!draft||!current||!form)return reply({error:'Team drafts unavailable'},503);
   const organizer=JSON.parse(current.content),formData=JSON.parse(form.data),matched=formEligible(organizer,formData);
+  const roles=readSquadRoles(organizer.squadRoles),candidates=new Map(),captains=new Set();
+  for(const p of matched.eligible){
+   const key=squadRoleKey(p.name);
+   if(key&&!candidates.has(key))candidates.set(key,{name:p.name,kind:p.method==='paid-companion'?'Plus-one':'Guest'});
+  }
+  for(const t of [...JSON.parse(draft.content),...(Array.isArray(organizer.teams)?organizer.teams:[])]){
+   const key=squadRoleKey(t.captain);
+   if(!key)continue;
+   captains.add(key);
+   candidates.set(key,{name:firstName(t.captain),kind:'Captain'});
+  }
   return reply({
    teams:JSON.parse(draft.content),revision:draft.revision,
-   guests:matched.eligible.map(p=>p.name).sort((a,b)=>a.localeCompare(b)),
+   guests:matched.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>p.name).sort((a,b)=>a.localeCompare(b)),
+   roleCandidates:[...candidates.values()].sort((a,b)=>a.name.localeCompare(b.name)),
+   roleCaptains:[...captains],roles,roleRevision:current.revision,
    guestGroups:matched.groups,
    isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
@@ -76,8 +90,10 @@ export async function onRequestPost({request,env}){
    env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first()
   ]);
   if(!organizer||!form)return reply({error:'Guest matching unavailable'},503);
-  const matched=formEligible(JSON.parse(organizer.content),JSON.parse(form.data));
-  const eligible=new Set(matched.eligible.map(p=>eligibleKey(p.name)));
+  const orgData=JSON.parse(organizer.content);
+  const matched=formEligible(orgData,JSON.parse(form.data));
+  const roles=readSquadRoles(orgData.squadRoles);
+  const eligible=new Set(matched.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   const canonical=name=>matched.aliases.get(eligibleKey(name))||eligibleKey(name);
   // Captains stay locked on their own teams. Every paid named companion is
   // otherwise an independent player and may join a different team from
@@ -85,6 +101,8 @@ export async function onRequestPost({request,env}){
   const captainOwners=new Map();
   for(let i=0;i<teams.length;i++){
    const k=canonical(teams[i].captain);
+   if(squadRoleKey(teams[i].captain)&&roles[squadRoleKey(teams[i].captain)])
+    return reply({error:'A non-playing person cannot be captain. Change their role to Playing or assign another captain.'},400);
    if(!k)continue;
    if(captainOwners.has(k))return reply({error:'One captain cannot lead multiple teams'},400);
    captainOwners.set(k,i);
@@ -94,7 +112,7 @@ export async function onRequestPost({request,env}){
     return reply({error:'Captains must remain on their own teams and cannot also appear in a member list.'},400);
   }
   for(const team of teams)for(const name of team.members){
-   if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid RSVP-confirmed guests or named paid companions with inviter RSVP can be added: '+name},400);
+   if(!eligible.has(eligibleKey(name)))return reply({error:'Only eligible Playing guests and paid named companions may join teams; staff and non-players cannot: '+name},400);
   }
   const result=await env.FRIENDSGIVING_DB.prepare('UPDATE team_drafts SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(teams),body.revision).run();
   if(!result.meta.changes)return reply({error:'Team draft changed in another tab. Refresh to review the latest changes.'},409);
