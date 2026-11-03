@@ -34,19 +34,25 @@ export async function onRequestGet({request,env}){
  if(!validHost(new URL(request.url).hostname))return reply({error:'Invalid host'},403);
  try{
   const refreshed=await reconcileTeams(env.FRIENDSGIVING_DB);
-  const [draft,current,form]=await Promise.all([
+  const [draft,current,form,guestSync]=await Promise.all([
    env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM team_drafts WHERE id=1').first(),
    env.FRIENDSGIVING_DB.prepare('SELECT content,revision FROM organizer_data WHERE id=1').first(),
-   env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first()
+   env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first(),
+   env.FRIENDSGIVING_DB.prepare('SELECT last_success_at,last_conflicts FROM sheet_sync_status WHERE id=1').first()
   ]);
   if(!draft||!current||!form)return reply({error:'Team drafts unavailable'},503);
-  const organizer=JSON.parse(current.content),matched=formEligible(organizer,JSON.parse(form.data));
+  const organizer=JSON.parse(current.content),formData=JSON.parse(form.data),matched=formEligible(organizer,formData);
   return reply({
    teams:JSON.parse(draft.content),revision:draft.revision,
    guests:matched.eligible.map(p=>p.name).sort((a,b)=>a.localeCompare(b)),
    guestGroups:matched.groups,
    isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
+   syncSources:{
+    guestLastSuccessAt:guestSync?.last_success_at||null,
+    formLastSuccessAt:formData.lastImportedAt||null,
+    guestConflicts:guestSync?.last_conflicts||0
+   },
    publishedTeams:organizer.teams||[],
    syncWarning:refreshed.ok?null:refreshed.error
   });
