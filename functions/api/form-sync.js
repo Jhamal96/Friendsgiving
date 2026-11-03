@@ -25,10 +25,17 @@ export async function onRequestPost({request,env}){
   const fields=['name','shirt','plusOne','plusOneShirt','children','athletic'],items=[];
   for(const r of payload.records){
    if(!r||!Number.isInteger(r.sourceRow)||r.sourceRow<2||r.sourceRow>10000||fields.some(k=>typeof r[k]!=='string'||r[k].length>300)||!r.name.trim())return json({error:'Invalid response fields'},400);
-   items.push({sourceRow:r.sourceRow,...Object.fromEntries(fields.map(k=>[k,r[k].trim()])),plusOneYes:typeof r.plusOneYes==='string'?r.plusOneYes.trim().slice(0,30):''});
+   items.push({sourceRow:r.sourceRow,...Object.fromEntries(fields.map(k=>[k,r[k].trim()])),plusOneYes:typeof r.plusOneYes==='string'?r.plusOneYes.trim().slice(0,30):'',additionalPlusOne:typeof r.additionalPlusOne==='string'?r.additionalPlusOne.trim().slice(0,600):undefined});
   }
-  const existing=await env.FRIENDSGIVING_DB.prepare('SELECT revision FROM friendsgiving_form_responses WHERE id=1').first();
+  const existing=await env.FRIENDSGIVING_DB.prepare('SELECT revision,data FROM friendsgiving_form_responses WHERE id=1').first();
   if(!existing)return json({error:'Form table unavailable'},503);
+  // Older installed Apps Script versions do not send column I. Preserve its
+  // latest imported values until the upgraded script is installed.
+  const oldRecords=JSON.parse(existing.data||'{}').records||[];
+  const prior=new Map(oldRecords.map(r=>[r.sourceRow,r]));
+  for(const r of items){
+   if(r.additionalPlusOne===undefined)r.additionalPlusOne=String(prior.get(r.sourceRow)?.additionalPlusOne||'').slice(0,600);
+  }
   const record={sourceSpreadsheet:sheetId,tab:'Form Responses 1',records:items,mode:'live_google_form_sync',lastImportedAt:new Date().toISOString()};
   const write=await env.FRIENDSGIVING_DB.prepare('UPDATE friendsgiving_form_responses SET data=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(record),existing.revision).run();
   if(!write.meta.changes)return json({error:'Concurrent sync; retry'},409);
