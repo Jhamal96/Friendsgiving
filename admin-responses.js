@@ -54,7 +54,7 @@ function changesSince(snapshot,ack){
   }
  }
  for(const [id,previous] of Object.entries(old)){
-  if(!now.has(id))updates.push({kind:'removed',current:null,previous});
+  if(!now.has(id))updates.push({kind:'removed',current:null,previous:{...previous,id}});
  }
  const order={new:0,updated:1,removed:2};
  updates.sort((a,b)=>order[a.kind]-order[b.kind]||
@@ -130,7 +130,10 @@ function considerUpdate(snapshot){
   dismissedIdentity='';
   return;
  }
- if(changeIdentity===dismissedIdentity||syncDialog.open)return;
+ // If a second sync happens while this report is open, include the newly
+ // changed entries before the user can acknowledge them.
+ if(syncDialog.open){openChanges(latestChanges);return}
+ if(changeIdentity===dismissedIdentity)return;
  if(document.querySelector('dialog[open]'))return;
  openChanges(latestChanges);
 }
