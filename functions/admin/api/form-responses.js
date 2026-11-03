@@ -40,7 +40,7 @@ export async function onRequestGet({env}){
    eligibleParticipantCount:eligibility.eligible.length,
    matched,review,plusOneMatches,
    matchingReasons:eligibility.reasonCounts,
-   lastImportedAt:formLastSync,lastGuestSync,
+   lastImportedAt:formLastSync,lastGuestSync:guestLastSync,
    formConnectionFresh:!stale(formLastSync),
    guestConnectionFresh:!stale(guestLastSync),
    syncConflicts:syncRow?.last_conflicts||0,
