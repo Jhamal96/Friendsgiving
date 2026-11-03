@@ -4,7 +4,7 @@ let data,rev,dirty=false,view='guests',guestSubView='all',filter='all',saving=fa
 const $=s=>document.querySelector(s),status=$('#status');
 function changed(){
  dirty=true;version++;status.textContent='Changes detected · Autosaving…';
- updatePaidTotal();clearTimeout(autoTimer);if(!blocked)autoTimer=setTimeout(saveChanges,900);
+ updatePaidTotal();window.FriendsgivingSearch?.refresh();clearTimeout(autoTimer);if(!blocked)autoTimer=setTimeout(saveChanges,900);
 }
 async function saveChanges(){
  clearTimeout(autoTimer);autoTimer=null;
@@ -48,7 +48,7 @@ function renderView(){
  $('#lists').hidden=guestTab;
  if(guestTab)renderGuests();else renderList(Number(view));
 }
-function renderList(gi){const root=$('#lists');root.replaceChildren();const g=defs[gi],section=document.createElement('div');section.className='group';const title=document.createElement('h2');title.textContent=g.name;section.append(title);const desc=document.createElement('p');desc.className='muted';desc.textContent='Mark items complete as you go. Changes save automatically.';section.append(desc);data.planning.forEach((row,ri)=>{if(!g.cols.some(c=>row[c]))return;const key=gi+':'+ri,line=document.createElement('div');line.className='line'+(data.completion[key]?' done':'');g.cols.forEach((c,i)=>line.append(field(g.labels[i],row[c],v=>row[c]=v)));const done=button(data.completion[key]?'✓ Completed':'Mark complete',()=>{data.completion[key]=!data.completion[key];changed();renderList(gi)},'complete');done.setAttribute('aria-pressed',String(!!data.completion[key]));line.append(done,button('Remove',()=>{g.cols.forEach(c=>row[c]='');delete data.completion[key];changed();renderList(gi)},'danger'));section.append(line)});section.append(button('+ Add '+g.name,()=>{const row=Array(9).fill('');data.planning.push(row);const ri=data.planning.length-1,line=document.createElement('div');line.className='line';g.cols.forEach((c,i)=>line.append(field(g.labels[i],'',v=>row[c]=v)));line.append(button('Remove',()=>{line.remove();g.cols.forEach(c=>row[c]='');changed()},'danger'));section.insertBefore(line,section.lastChild);line.querySelector('input').focus();changed()}));root.append(section)}
+function renderList(gi){const root=$('#lists');root.replaceChildren();const g=defs[gi],section=document.createElement('div');section.className='group';const title=document.createElement('h2');title.textContent=g.name;section.append(title);const desc=document.createElement('p');desc.className='muted';desc.textContent='Mark items complete as you go. Changes save automatically.';section.append(desc);data.planning.forEach((row,ri)=>{if(!g.cols.some(c=>row[c]))return;const key=gi+':'+ri,line=document.createElement('div');line.className='line'+(data.completion[key]?' done':'');line.dataset.plannerRow=String(ri);g.cols.forEach((c,i)=>line.append(field(g.labels[i],row[c],v=>row[c]=v)));const done=button(data.completion[key]?'✓ Completed':'Mark complete',()=>{data.completion[key]=!data.completion[key];changed();renderList(gi)},'complete');done.setAttribute('aria-pressed',String(!!data.completion[key]));line.append(done,button('Remove',()=>{g.cols.forEach(c=>row[c]='');delete data.completion[key];changed();renderList(gi)},'danger'));section.append(line)});section.append(button('+ Add '+g.name,()=>{const row=Array(9).fill('');data.planning.push(row);const ri=data.planning.length-1,line=document.createElement('div');line.className='line';line.dataset.plannerRow=String(ri);g.cols.forEach((c,i)=>line.append(field(g.labels[i],'',v=>row[c]=v)));line.append(button('Remove',()=>{line.remove();g.cols.forEach(c=>row[c]='');changed()},'danger'));section.insertBefore(line,section.lastChild);line.querySelector('input').focus();changed()}));root.append(section)}
 // The Google Guest List is the active source of truth. Display a name once,
 // even when a duplicate copy exists in historical organizer data. Keep those
 // original rows intact for audit/reconciliation instead of deleting payments.
@@ -132,7 +132,7 @@ function renderGuests(){
   const isTotal=!row[0].trim()&&row.some(Boolean),payment=pay(row);
   if(notRsvp&&(!row[0].trim()||rsvpConfirmed(row)))return;
   if(!notRsvp&&!isTotal&&filter!=='all'&&filter!==payment)return;
-  const card=document.createElement('article');card.className='guest';
+  const card=document.createElement('article');card.className='guest';card.dataset.guestIndex=String(i);
   const heading=document.createElement('h3');heading.textContent=row[0]||'Sheet total / unnamed entry';
   const badge=document.createElement('span');
   badge.className='badge '+(notRsvp?'rsvp-pending':payment);
@@ -177,6 +177,47 @@ function renderGuests(){
   root.append(p);
  }
 }
+function plannerSearch(query,matches){
+ if(!data||!Array.isArray(data.guests)||!Array.isArray(data.planning))return [];
+ const found=[],entries=guestEntries().entries;
+ for(const {row,index} of entries){
+  if(!row[0]?.trim())continue;
+  const payment=pay(row);
+  const status=rsvpStatus(row);
+  if(!matches(query,row[0],row[1],row[2],row[3],row[4],row[5],row[6],payment,status,'guest','payment','RSVP'))continue;
+  found.push({
+   title:String(row[0]).trim(),group:'Guests & payments',
+   detail:'RSVP: '+status+' · Payment: '+payment+(row[6]?' · Shirt: '+row[6]:''),
+   activate:()=>{
+    view='guests';guestSubView='all';filter='all';renderTabs();renderView();
+    window.FriendsgivingSearch?.navigate($('#guests [data-guest-index="'+index+'"]'));
+   }
+  });
+ }
+ for(let gi=0;gi<defs.length;gi++){
+  const group=defs[gi];
+  if(matches(query,group.name)){
+   found.push({title:'Open '+group.name,group:'Planner section',detail:'Go to '+group.name+' planning list',
+    activate:()=>{view=String(gi);renderTabs();renderView();window.FriendsgivingSearch?.navigate($('#lists .group'))}});
+  }
+  data.planning.forEach((row,ri)=>{
+   if(!group.cols.some(i=>String(row[i]||'').trim()))return;
+   const contents=group.cols.map(i=>String(row[i]||'').trim()).filter(Boolean);
+   if(!matches(query,group.name,...contents))return;
+   found.push({
+    title:contents[0]?.slice(0,90)||group.name,
+    detail:contents.join(' · ').slice(0,180)+(data.completion[gi+':'+ri]?' · Completed':' · In progress'),
+    group:group.name,
+    activate:()=>{
+     view=String(gi);renderTabs();renderView();
+     window.FriendsgivingSearch?.navigate($('#lists [data-planner-row="'+ri+'"]'));
+    }
+   });
+  });
+ }
+ return found;
+}
+window.FriendsgivingSearch?.register(plannerSearch);
 async function start(){try{const r=await fetch('/admin/api/planner',{cache:'no-store'});if(!r.ok)throw Error('Unable to load planner. Please refresh.');const out=await r.json();data=out.data;rev=out.revision;if(!data||!Array.isArray(data.planning)||!Array.isArray(data.guests))throw Error('Planner data unavailable.');data.completion=data.completion||{};renderTabs();renderView();$('#save').disabled=false;$('#notice').textContent='Autosave on · Guest, payment and planning edits save to Cloudflare. They do not write back to Google Sheets.'}catch(e){$('#notice').textContent=e.message}}
 async function refreshSheetSyncStatus(){
  const el=$('#sheetSyncStatus');if(!el)return;
@@ -203,7 +244,7 @@ setInterval(async()=>{
   if(!Number.isSafeInteger(result.revision)||result.revision===rev||!Array.isArray(result.data?.guests)||!Array.isArray(result.data?.planning))return;
   if(dirty||saving||blocked)return;
   data=result.data;rev=result.revision;data.completion=data.completion||{};
-  renderTabs();renderView();
+  renderTabs();renderView();window.FriendsgivingSearch?.refresh();
   status.textContent='✓ Guest List refreshed from cloud';
  }catch{}
 },60000);
