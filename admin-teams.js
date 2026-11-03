@@ -251,17 +251,23 @@ function openEditor(index){
  function drawChoices(){
   const choices=availableGuests(),previous=memberSelect.value;
   memberSelect.replaceChildren();
-  const placeholder=el('option','','Select an eligible form participant…');placeholder.value='';memberSelect.append(placeholder);
-  choices.forEach(g=>{const option=el('option','',g);option.value=g;memberSelect.append(option)});
+  const placeholder=el('option','','Select an eligible player or paid +1…');placeholder.value='';memberSelect.append(placeholder);
+  const plusKeys=paidPlusOneKeys();
+  choices.forEach(g=>{
+   const option=el('option','',plusKeys.has(canonical(g))?'🎟️ Paid +1 · '+g:g);
+   option.value=g;memberSelect.append(option);
+  });
   memberSelect.value=choices.includes(previous)?previous:'';
   memberSelect.disabled=!choices.length;addButton.disabled=!choices.length;randomButton.disabled=!choices.length;
-  availableCount.textContent=choices.length+' eligible form '+(choices.length===1?'participant':'participants')+' available';
+  const plusAvailable=choices.filter(g=>plusKeys.has(canonical(g))).length;
+  availableCount.textContent=choices.length+' eligible '+(choices.length===1?'player':'players')+' available'+
+    (plusAvailable?' · '+plusAvailable+' paid +1 '+(plusAvailable===1?'player':'players'):'');
  }
  function drawMembers(){
   members.replaceChildren();
   if(!draft.members.length)members.append(el('span','muted','No members assigned yet'));
   draft.members.forEach((g,i)=>{
-   const chip=el('span','member-chip',g+' ');
+   const chip=el('span','member-chip',paidPlusOneKeys().has(canonical(g))?'🎟️ +1 '+g+' ':g+' ');
    chip.append(btn('×',()=>{draft.members.splice(i,1);drawMembers();drawChoices()},'remove-member'));
    members.append(chip);
   });
