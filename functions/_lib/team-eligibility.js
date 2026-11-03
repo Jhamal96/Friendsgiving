@@ -95,7 +95,17 @@ export function balanceTeams(input,eligibility){
  const allowed=new Set(eligibility.eligible.map(p=>canonical(p.name)));
  const groups=[],used=new Set();
  for(const g of eligibility.groups||[]){
-  const people=[g.primary,...(Array.isArray(g.companions)?g.companions:g.plusOne?[g.plusOne]:[])];
+  const base=Array.isArray(g.companions)?g.companions:g.plusOne?[g.plusOne]:[];
+  const people=[g.primary];
+  let homeCaptain=captainOwner.get(canonical(g.primary));
+  // A respondent may list a second captain as a companion. Each captain
+  // remains captain of their own team, never an opposing team's member.
+  for(const companion of base){
+   const owner=captainOwner.get(canonical(companion));
+   if(owner!==undefined&&homeCaptain!==undefined&&owner!==homeCaptain)continue;
+   if(owner!==undefined)homeCaptain=owner;
+   people.push(companion);
+  }
   const ids=people.map(canonical),primary=ids[0];
   if(!primary||used.has(primary)||ids.some(k=>!allowed.has(k)||used.has(k)))continue;
   ids.forEach(k=>used.add(k));
