@@ -47,9 +47,10 @@ function companionsFor(record,eligible,lookup){
  }
  return result;
 }
-export async function responseUpdateSnapshot({organizer,form,eligibility,teams,isPublished}){
+export async function responseUpdateSnapshot({organizer,form,eligibility,teamEligibility,teams,isPublished}){
  const lookup=assignmentLookup(teams);
- const matchedRows=new Set((eligibility.matched||[]).map(m=>m.sourceRow));
+ const qualifiedTeams=new Set((teamEligibility?.eligible||[]).map(p=>firstKey(p.name)));
+ const captainKeys=new Set((Array.isArray(teams)?teams:[]).map(t=>firstKey(t.captain)).filter(Boolean));
  const latest=new Map();
  for(const record of Array.isArray(form.records)?form.records:[]){
   const key=nameKey(record?.name);
@@ -65,21 +66,20 @@ export async function responseUpdateSnapshot({organizer,form,eligibility,teams,i
   if(!Array.isArray(row)||!nameKey(row[0]))continue;
   guestMap.set(nameKey(row[0]),row);
  }
- const verifiedNames=new Set([
-  ...(eligibility.matched||[]).map(m=>nameKey(m.guest)),
-  ...(eligibility.eligible||[]).filter(p=>p.method==='paid-companion').map(p=>firstKey(p.name))
- ]);
+ // Team placement is verified against the Guest List, not Form matching.
+ // Starred captain names are a special locked exception for team leadership.
+ const verifiedNames=new Set([...qualifiedTeams,...captainKeys]);
  const items=await Promise.all([
   ...records.map(async record=>{
    const name=shortLabel(record.name);
-   const companions=companionsFor(record,eligibility.eligible||[],lookup);
+   const companions=companionsFor(record,teamEligibility?.eligible||[],lookup);
    const id='f'+(await digest(['form',nameKey(record.name)])).slice(0,24);
    const signature=(await digest([
     record.name,record.shirt,record.plusOneYes,record.plusOne,
     record.plusOneShirt,record.additionalPlusOne,record.children,record.athletic
    ])).slice(0,32);
    return {id,signature,source:'form',label:name||'Response row '+record.sourceRow,
-    team:displayAssignment(lookup,record.name,matchedRows.has(record.sourceRow)),
+    team:displayAssignment(lookup,record.name,verifiedNames.has(firstKey(record.name))),
     isPublished,companions,sourceRow:record.sourceRow};
   }),
   ...[...guestMap.values()].map(async row=>{
@@ -91,7 +91,7 @@ export async function responseUpdateSnapshot({organizer,form,eligibility,teams,i
    // A paid "+1" Guest List entry represents a named companion from the
    // sponsor's Form, not an independent participant on a team.
    const inviter=placeholder?records.find(r=>firstKey(r.name)===first):null;
-   const companions=inviter?companionsFor(inviter,eligibility.eligible||[],lookup):[];
+   const companions=inviter?companionsFor(inviter,teamEligibility?.eligible||[],lookup):[];
    return {id,signature,source:'guest',
     label:placeholder?firstName(raw)+' +1 payment':shortLabel(raw),
     team:displayAssignment(lookup,raw,verified),
