@@ -108,12 +108,21 @@ export function formEligible(organizer,form){
   }).filter(Boolean);
   const rank=candidates.length?Math.min(...candidates.map(c=>c.rank)):null;
   const best=rank===null?[]:candidates.filter(c=>c.rank===rank);
-  return {person,rank,best};
+  // "Chris N" is not unique if the Guest List also has "Chris Noel".
+  // Do not automatically match an initial when another guest has the same
+  // first name and surname initial, even if their surname is fully written.
+  const tokens=nameTokens(person.rawName),first=tokens[0],last=tokens.at(-1);
+  const competingInitials=rank===2?paymentRows.filter(row=>{
+   const parts=nameTokens(row[0]);
+   return parts.length>=2&&parts[0]===first&&parts.at(-1)[0]===last?.[0];
+  }):[];
+  const ambiguousInitial=rank===2&&competingInitials.length>1;
+  return {person,rank,best,ambiguousInitial,competingInitials};
  });
  // Strong full-name matches win before surname-initial and unique-first fallback.
  // A guest may only be claimed by one response. Never infer fuzzy matches.
  for(let priority=0;priority<=3;priority++){
-  const eligible=plan.filter(p=>p.rank===priority&&p.best.length===1&&!usedSheet.has(p.best[0].index));
+  const eligible=plan.filter(p=>p.rank===priority&&!p.ambiguousInitial&&p.best.length===1&&!usedSheet.has(p.best[0].index));
   const collisions=new Map();
   for(const p of eligible){
    const index=p.best[0].index;
@@ -130,10 +139,11 @@ export function formEligible(organizer,form){
   const person=p.person,hit=p.claimed;
   const common={sourceRow:person.sourceRow};
   if(!hit){
-   const reason=p.best.length>1?'ambiguous-name':
+   const reason=p.ambiguousInitial||p.best.length>1?'ambiguous-name':
     p.best.length===1&&usedSheet.has(p.best[0].index)?'duplicate-match':
     p.best.length===1?'ambiguous-name':'no-match';
-   const suggestions=p.best.length?p.best.slice(0,3).map(x=>cleanName(x.row[0])):reviewSuggestions(person.rawName,paymentRows);
+   const suggestions=p.ambiguousInitial?p.competingInitials.slice(0,3).map(x=>cleanName(x[0])):
+    p.best.length?p.best.slice(0,3).map(x=>cleanName(x.row[0])):reviewSuggestions(person.rawName,paymentRows);
    review.push({...common,reason,suggestions});
    continue;
   }
