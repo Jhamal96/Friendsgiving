@@ -63,6 +63,11 @@ export async function onRequestGet({request,env}){
    isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
    paidCompanions:matched.eligible.filter(x=>x.method==='paid-companion').length,
+   plusOnePlayers:matched.eligible.filter(x=>x.method==='paid-companion').map(x=>({
+    name:x.name,
+    payment:x.payment,
+    playing:!roles[squadRoleKey(x.name)]
+   })),
    companionNeedsReview:matched.companionReviewCount,
    syncSources:{
     guestLastSuccessAt:guestSync?.last_success_at||null,
