@@ -16,7 +16,15 @@ function extraCompanions(value){
 }
 export function formEligible(organizer,form){
  // Legacy placeholder guest rows such as "Yana +1" are not separate verified primary people.
- const paymentRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>Array.isArray(r)&&nameKey(r[0])&&!/\+\s*1(?:\s|$)/i.test(String(r[0])));
+ // Keep local planner history, but only assign a person if their guest entry
+ // still appears in the latest successfully synced Google Guest List.
+ const baseline=organizer?.sheetSync?.status==='sheet_to_site_active'?organizer.sheetSync.baseline:null;
+ const activeSource=baseline&&typeof baseline==='object'&&!Array.isArray(baseline)
+  ?new Set(Object.keys(baseline).map(k=>String(k).trim().toLocaleLowerCase('en-US'))):null;
+ const paymentRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>{
+  if(!Array.isArray(r)||!nameKey(r[0])||/\+\s*1(?:\s|$)/i.test(String(r[0])))return false;
+  return !activeSource||activeSource.has(String(r[0]).trim().toLocaleLowerCase('en-US'));
+ });
  const responders=new Map();
  for(const r of Array.isArray(form?.records)?form.records:[]){
   const key=nameKey(r?.name);
