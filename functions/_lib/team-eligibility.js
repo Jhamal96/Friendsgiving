@@ -15,7 +15,8 @@ function extraCompanions(value){
  return String(value||'').split(/[\r\n]+/).map(v=>firstName(v)).filter(Boolean);
 }
 export function formEligible(organizer,form){
- const paymentRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>Array.isArray(r)&&nameKey(r[0]));
+ // Legacy placeholder guest rows such as "Yana +1" are not separate verified primary people.
+ const paymentRows=(Array.isArray(organizer?.guests)?organizer.guests:[]).filter(r=>Array.isArray(r)&&nameKey(r[0])&&!/\+\s*1(?:\s|$)/i.test(String(r[0])));
  const responders=new Map();
  for(const r of Array.isArray(form?.records)?form.records:[]){
   const key=nameKey(r?.name);
