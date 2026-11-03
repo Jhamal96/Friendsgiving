@@ -2,14 +2,16 @@
 // The organizer pages have no login, so do not send phone, email, allergy
 // notes, or raw additional-plus-one free text.
 import {formEligible,firstName,nameKey} from '../../_lib/team-eligibility.js';
+import {responseUpdateSnapshot} from '../../_lib/response-update-snapshot.js';
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(x,status=200)=>new Response(JSON.stringify(x),{status,headers});
 export async function onRequestGet({env}){
  try{
-  const [formRow,guestRow,syncRow]=await Promise.all([
+  const [formRow,guestRow,syncRow,draftRow]=await Promise.all([
    env.FRIENDSGIVING_DB.prepare('SELECT data,revision FROM friendsgiving_form_responses WHERE id=1').first(),
    env.FRIENDSGIVING_DB.prepare('SELECT content FROM organizer_data WHERE id=1').first(),
-   env.FRIENDSGIVING_DB.prepare('SELECT last_success_at,last_check_at,last_conflicts FROM sheet_sync_status WHERE id=1').first()
+   env.FRIENDSGIVING_DB.prepare('SELECT last_success_at,last_check_at,last_conflicts FROM sheet_sync_status WHERE id=1').first(),
+   env.FRIENDSGIVING_DB.prepare('SELECT content FROM team_drafts WHERE id=1').first()
   ]);
   if(!formRow||!guestRow)return reply({error:'Form and guest sources are not initialized'},503);
   const form=JSON.parse(formRow.data),organizer=JSON.parse(guestRow.content);
@@ -95,10 +97,31 @@ export async function onRequestGet({env}){
     });
    }
   }
+  // A participant can be assigned in the public lineup or private draft.
+  // Use only individual first-name lookups here; never return entire rosters.
+  const isPublished=organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0);
+  const teams=isPublished?organizer.teams||[]:draftRow?.content?JSON.parse(draftRow.content):[];
+  const assigned=new Map();
+  for(const team of teams){
+   if(!team||typeof team.name!=='string')continue;
+   for(const person of [team.captain,...(Array.isArray(team.members)?team.members:[])]){
+    const key=nameKey(firstName(person));
+    if(!key)continue;
+    if(assigned.has(key)&&assigned.get(key)!==team.name)assigned.set(key,null);
+    else if(!assigned.has(key))assigned.set(key,team.name);
+   }
+  }
+  for(const entry of matched)entry.team=assigned.get(nameKey(firstName(entry.guest)))||null;
+  for(const entry of plusOneMatches){
+   if(entry.status==='matched')entry.team=assigned.get(nameKey(entry.guest))||null;
+   else entry.team=null;
+  }
+  const changeSnapshot=await responseUpdateSnapshot({
+   organizer,form,eligibility,teams,isPublished
+  });
   matched.sort((a,b)=>a.guest.localeCompare(b.guest));
   review.sort((a,b)=>(a.sourceRow||0)-(b.sourceRow||0));
   plusOneMatches.sort((a,b)=>a.with.localeCompare(b.with)||a.guest.localeCompare(b.guest));
-  const isPublished=organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0);
   const guestLastSync=syncRow?.last_success_at||null,formLastSync=form.lastImportedAt||null;
   const stale=t=>!t||!Number.isFinite(Date.parse(t))||Date.now()-Date.parse(t)>30*60*1000;
   return reply({
@@ -111,7 +134,7 @@ export async function onRequestGet({env}){
    plusOneMatchedCount:plusOneMatches.filter(x=>x.status==='matched').length,
    plusOneNeedsReviewCount:plusOneMatches.filter(x=>x.status!=='matched').length,
    eligibleParticipantCount:eligibility.eligible.length,
-   matched,review,plusOneMatches,
+   matched,review,plusOneMatches,changeSnapshot,
    matchingReasons:eligibility.reasonCounts,
    matchingMethods:eligibility.matched.reduce((counts,m)=>{
     const key=m.method||'other';counts[key]=(counts[key]||0)+1;return counts;
@@ -120,7 +143,7 @@ export async function onRequestGet({env}){
    formConnectionFresh:!stale(formLastSync),
    guestConnectionFresh:!stale(guestLastSync),
    syncConflicts:syncRow?.last_conflicts||0,
-   isPublished,teamCount:(organizer.teams||[]).length,
+   isPublished,teamCount:(organizer.teams||[]).length,teamMode:isPublished?'published':'draft',
    revision:formRow.revision,
    privacy:'No contact information, payment amounts, dietary notes, or raw companion comments returned'
   });
