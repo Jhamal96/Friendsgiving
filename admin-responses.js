@@ -27,7 +27,12 @@ async function load(){
    'duplicate-first-name':'First name already used; distinguish before assigning'
   };
   fill('reviewRows',d.review||[],r=>item('Response row '+r.sourceRow,reasons[r.status]||'Review original Form and Guest List'));
-  fill('plusOneMatches',d.plusOneMatches||[],r=>item(r.guest||'Response row '+r.sourceRow,r.status==='matched'?'Matched plus-one':'Review plus-one in original Sheet'));
+  fill('plusOneMatches',d.plusOneMatches||[],r=>{
+   const name=r.guest||'Response row '+r.sourceRow;
+   const paired=r.with?'With '+r.with+' · ':'';
+   const description=paired+(r.status==='matched'?'Eligible for teams':'Needs review / not yet eligible')+' · Form row '+r.sourceRow;
+   return item(name,description);
+  });
   const fmt=value=>value?new Date(value).toLocaleString():'No successful check';
   const formOk=d.formConnectionFresh===true,guestOk=d.guestConnectionFresh===true;
   const message='Guest List checked: '+fmt(d.lastGuestSync)+'. Forms received: '+fmt(d.lastImportedAt)+'.';
