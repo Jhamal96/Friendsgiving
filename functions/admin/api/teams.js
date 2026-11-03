@@ -1,4 +1,4 @@
-import {formEligible,nameKey as eligibleKey,cleanName,balanceTeams} from '../../_lib/team-eligibility.js';
+import {guestListEligible,nameKey as eligibleKey,cleanName,balanceTeams} from '../../_lib/team-eligibility.js';
 import {readSquadRoles,squadRoleKey} from '../../_lib/squad-roles.js';
 // Admin-side team management. The public endpoint never returns planner/payment details.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -53,7 +53,7 @@ export async function onRequestPost({request,env}){
   const ids=new Set(),assigned=new Set(),cleaned=[];
   const form=await env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first();
   if(!form)return reply({error:'Form responses unavailable'},503);
-  const eligibility=formEligible(data,JSON.parse(form.data));
+  const eligibility=guestListEligible(data,JSON.parse(form.data));
   const roles=readSquadRoles(data.squadRoles);
   const canonical=value=>eligibility.aliases.get(eligibleKey(value))||eligibleKey(value);
   // Captain names count as reserved players, even though they aren't duplicated in members.
@@ -81,7 +81,7 @@ export async function onRequestPost({request,env}){
   }
   const eligible=new Set(eligibility.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
-   if(!eligible.has(eligibleKey(member)))return reply({error:'Only eligible Playing participants can be published on teams; referees and non-players are excluded: '+member},400);
+   if(!eligible.has(eligibleKey(member)))return reply({error:'Only Guest List players with both RSVP = Yes and Paid = Yes and without * or a non-playing role can be published: '+member},400);
   }
   // Verify all eligible individual players, including paid plus-ones, and keep teams balanced before publishing.
   const balanced=balanceTeams(cleaned,eligibility,roles);
