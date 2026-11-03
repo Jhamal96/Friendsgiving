@@ -33,7 +33,7 @@ let p=$('p','','Source: ');link(p,'HALO FRIENDSGIVING FIELD DAY 🏆 (Responses)
  form.append($('p','fg-note','Form submissions are matched to existing guests without changing payment status or publishing any form details on the public Friendsgiving page.'));
  form.append($('p','fg-restricted','Only matching summaries are shown here. Contact details and dietary/allergy notes stay in the original Sheet; the admin pages are currently not sign-in protected.'));
  actions(form,checkForm,'Review guest matches','/admin/responses');
- const setup=$('p','fg-note','To receive future form submissions automatically, install the private response synchronization script in the original Google Sheet.');form.append(setup);link(form,'Response connection setup instructions','https://github.com/Jhamal96/Friendsgiving/blob/main/integrations/FORM-RESPONSES.md');
+ const setup=$('p','fg-note','The Forms and Guest List scripts each send secure updates to the website. For future additional-companion names to sync, update the Forms Apps Script to its latest version. Website edits do not write back to the original sheets.');form.append(setup);link(form,'Response connection setup instructions','https://github.com/Jhamal96/Friendsgiving/blob/main/integrations/FORM-RESPONSES.md');
  root.append(google,form);
  const heading=box.querySelector('h2');
  if(heading)heading.insertAdjacentElement('afterend',root);
@@ -54,7 +54,9 @@ async function checkForm(){
  try{
   const r=await fetch('/admin/api/form-responses',{cache:'no-store'});if(!r.ok)throw Error('Unavailable');
   const d=await r.json();
-  formStatus.textContent=d.uniqueRespondents+' distinct responses, '+d.matchedCount+' matched to existing guests, '+d.needsReviewCount+' requiring review. '+(d.mode==='live_google_form_sync'?'Automatic response updates active.':'Initial file imported; automatic response updates need Google Apps Script authorization.');
+  formStatus.textContent=d.uniqueRespondents+' distinct form respondents; '+d.matchedCount+' matched with Paid and RSVP both Yes; '+d.plusOneMatchedCount+' eligible named companions; '+d.needsReviewCount+' awaiting payment, RSVP, or name review. '+
+   (d.guestConnectionFresh&&d.formConnectionFresh?'Both Google feeds are checking in.':'Check Google Apps Script triggers: one or both sources may be stale.')+
+   (d.syncConflicts?' '+d.syncConflicts+' Guest List conflicts need attention.':'');
  }catch{formStatus.textContent='Form matching status temporarily unavailable.'}
 }
 checkForm();
