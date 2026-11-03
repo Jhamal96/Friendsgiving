@@ -296,29 +296,19 @@ export function balanceTeams(input,eligibility){
  }
  const before=new Map();
  for(let i=0;i<teams.length;i++)for(const member of teams[i].members){const k=canonical(member);if(!before.has(k))before.set(k,i)}
+ // Every verified guest AND every individually paid/confirmed plus-one is
+ // one independent player in team randomization. Their shared registration
+ // determines eligibility, not which team they must be on.
  const allowed=new Set(eligibility.eligible.map(p=>canonical(p.name)));
  const groups=[],used=new Set();
- for(const g of eligibility.groups||[]){
-  const base=Array.isArray(g.companions)?g.companions:g.plusOne?[g.plusOne]:[];
-  const sponsorKey=canonical(g.primary);
-  // Guest List + verified Form matching is the allowlist. A duplicate name
-  // must never drop otherwise eligible members of the same registration.
-  // Captains remain reserved on their own teams even if listed as companions.
-  let homeCaptain=captainOwner.get(sponsorKey);
-  const candidates=[...(allowed.has(sponsorKey)?[g.primary]:[]),...base];
-  const names=[],keys=[],local=new Set();
-  for(const name of candidates){
-   const key=canonical(name);
-   if(!key||!allowed.has(key)||local.has(key)||used.has(key))continue;
-   const owner=captainOwner.get(key);
-   if(owner!==undefined&&homeCaptain!==undefined&&owner!==homeCaptain)continue;
-   if(owner!==undefined)homeCaptain=owner;
-   local.add(key);names.push(name);keys.push(key);
-  }
-  if(!names.length)continue;
-  keys.forEach(k=>used.add(k));
-  groups.push({names,keys,sponsorCaptain:captainOwner.get(sponsorKey)});
+ for(const person of eligibility.eligible||[]){
+  const key=canonical(person.name);
+  if(!key||!allowed.has(key)||used.has(key))continue;
+  used.add(key);
+  if(captainOwner.has(key))continue; // Captains are reserved on their own teams.
+  groups.push({names:[person.name],keys:[key],sponsorCaptain:null});
  }
+
  const claimed=new Set(),buckets=teams.map(()=>[]),sizes=teams.map(t=>canonical(t.captain)?1:0);
  for(const group of groups){
   let fixed=group.sponsorCaptain??null;
@@ -354,7 +344,16 @@ export function balanceTeams(input,eligibility){
   buckets[to].push(...group.members);
   sizes[from]-=group.members.length;sizes[to]+=group.members.length;group.owner=to;
  }
- teams.forEach((t,i)=>{t.members=buckets[i]});
+ // Keep the existing team-member display order when reconciliation has
+ // nothing to change. Explicit randomization produces a new saved order.
+ teams.forEach((t,i)=>{
+  const positions=new Map(t.members.map((name,index)=>[canonical(name),index]));
+  buckets[i].sort((a,b)=>{
+   const left=positions.get(canonical(a)),right=positions.get(canonical(b));
+   return (left===undefined?Infinity:left)-(right===undefined?Infinity:right);
+  });
+  t.members=buckets[i];
+ });
  const now=new Set(teams.flatMap(t=>t.members.map(canonical)));
  let added=0,moved=0,removed=0;
  teams.forEach((t,i)=>t.members.forEach(n=>{const k=canonical(n);if(!before.has(k))added++;else if(before.get(k)!==i)moved++}));
