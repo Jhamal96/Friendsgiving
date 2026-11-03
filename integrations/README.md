@@ -10,7 +10,7 @@ Synced fields: Guest name, Size Shirt, Amount, RSVP, Paid, Paid Via, Shirt Size.
 - The endpoint validates a private token using a SHA-256 hash stored in D1. No secret is stored in GitHub.
 - Sheet updates merge field-by-field into the website. Website-only changes are preserved. If both locations change the same cell, the website value is preserved and a conflict is recorded.
 - A change to the Google Sheet can be sent by its installable edit trigger; a scheduled trigger checks every five minutes for changes, including updates from forms that might not fire edit triggers.
-- Guest records not present in the Sheet are preserved, not automatically deleted.
+- Guest records not present in the Sheet are preserved for organizer history, not automatically deleted. **They no longer qualify for teams** after the next successful full Sheet sync, because eligibility uses only current Guest List entries also matched in the Form.
 - Team captains, food, and games remain intact. Whenever a guest's RSVP or Paid status changes, the site recomputes eligibility against the latest Google Form responses, adjusts private team drafts, and updates an already-published lineup. Unpublished teams stay hidden.
 - Only names present in the form and matching a unique Guest List row with both RSVP and Paid set to Yes are eligible as main participants. Named companions accompany their matched participant; team displays use first names and exclude the specifically nonparticipating companions.
 - The organizer **Response Matching** and **Team Assignments** pages share the same eligibility rules and show sync status from both sources.
