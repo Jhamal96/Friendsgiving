@@ -73,7 +73,7 @@ export function formEligible(organizer,form){
 
 export function balanceTeams(input,eligibility){
  if(!Array.isArray(input)||!input.length)return {teams:input||[],changed:false,assigned:0,removed:0,added:0,moved:0};
- const teams=input.map(t=>({...t,members:Array.isArray(t.members)?[...t.members]:[]}));
+ const teams=input.map(t=>({...t,captain:cleanName(t.captain),members:Array.isArray(t.members)?[...t.members]:[]}));
  const captainOwner=new Map(),alias=eligibility.aliases;
  const canonical=s=>alias.get(nameKey(s))||nameKey(s);
  for(let i=0;i<teams.length;i++){
@@ -106,7 +106,11 @@ export function balanceTeams(input,eligibility){
  // Existing placements take precedence, followed by least-filled teams.
  for(const group of grouped){
   let fixed=null;
-  for(const key of group.k){if(captainOwner.has(key)){fixed=captainOwner.get(key);break}}
+  for(const key of group.k){
+   if(!captainOwner.has(key))continue;
+   if(fixed!==null&&captainOwner.get(key)!==fixed)return {teams:input,changed:false,error:'Companion cannot be a captain on an opposing team'};
+   fixed=captainOwner.get(key);
+  }
   const initial=fixed!==null?fixed:current.get(group.k[0])??current.get(group.k[1]);
   const dest=initial===undefined?sizes.indexOf(Math.min(...sizes)):initial;
   const members=group.names.filter((name,i)=>!capKeys.has(group.k[i])&&!claimed.has(group.k[i]));
