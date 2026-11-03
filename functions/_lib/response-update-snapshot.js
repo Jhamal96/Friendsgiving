@@ -88,10 +88,14 @@ export async function responseUpdateSnapshot({organizer,form,eligibility,teams,i
    const signature=(await digest(row.map(v=>String(v??'').trim()))).slice(0,32);
    const key=nameKey(raw),first=firstKey(raw);
    const verified=!placeholder&&(verifiedNames.has(key)||verifiedNames.has(first));
+   // A paid "+1" Guest List entry represents a named companion from the
+   // sponsor's Form, not an independent participant on a team.
+   const inviter=placeholder?records.find(r=>firstKey(r.name)===first):null;
+   const companions=inviter?companionsFor(inviter,eligibility.eligible||[],lookup):[];
    return {id,signature,source:'guest',
     label:placeholder?firstName(raw)+' +1 payment':shortLabel(raw),
     team:displayAssignment(lookup,raw,verified),
-    isPublished,companions:[],paymentEntry:placeholder};
+    isPublished,companions,paymentEntry:placeholder};
   })
  ]);
  items.sort((a,b)=>a.source.localeCompare(b.source)||a.label.localeCompare(b.label)||a.id.localeCompare(b.id));
