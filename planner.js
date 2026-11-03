@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const defs=[{name:'Games',cols:[0],labels:['Game or relay']},{name:'Drinks & supplies',cols:[1],labels:['Item']},{name:'Appetizers',cols:[2],labels:['Item']},{name:'Main course',cols:[3],labels:['Item']},{name:'Schedule',cols:[4,5],labels:['Activity','Time']},{name:'Groceries',cols:[6,7],labels:['Item','Price']},{name:'Notes',cols:[8],labels:['Note']}],guestLabels=['Guest name','Size Shirt (original column)','Amount','RSVP','Paid','Paid via','Shirt size'];
-let data,rev,dirty=false,view='guests',filter='all',saving=false,blocked=false,version=0,autoTimer=null;
+let data,rev,dirty=false,view='guests',guestSubView='all',filter='all',saving=false,blocked=false,version=0,autoTimer=null;
 const $=s=>document.querySelector(s),status=$('#status');
 function changed(){
  dirty=true;version++;status.textContent='Changes detected · Autosaving…';
@@ -27,16 +27,23 @@ function field(label,value,onchange){const wrap=document.createElement('label');
 function button(text,fn,cls){const b=document.createElement('button');b.type='button';b.textContent=text;if(cls)b.className=cls;b.addEventListener('click',fn);return b}
 function renderTabs(){
  const root=$('#tabs');root.replaceChildren();
- const awaiting=data?guestEntries().entries.filter(({row})=>row[0].trim()&&!rsvpConfirmed(row)).length:0;
- [['guests','Guests & payments'],['not-rsvp','Not RSVP’d ('+awaiting+')'],...defs.map((g,i)=>[String(i),g.name])].forEach(([key,label])=>{
+ [['guests','Guests & payments'],...defs.map((g,i)=>[String(i),g.name])].forEach(([key,label])=>{
   const b=button(label,()=>{view=key;renderTabs();renderView()});
   b.setAttribute('aria-pressed',String(view===key));
-  if(key==='not-rsvp')b.title='Guests with No or missing RSVP confirmation';
+  root.append(b);
+ });
+}
+function renderGuestSubTabs(){
+ const root=$('#guestSubTabs');root.replaceChildren();
+ const awaiting=guestEntries().entries.filter(({row})=>row[0].trim()&&!rsvpConfirmed(row)).length;
+ [['all','All guests'],['not-rsvp','Not RSVP’d ('+awaiting+')']].forEach(([key,label])=>{
+  const b=button(label,()=>{guestSubView=key;renderGuests()});
+  b.setAttribute('aria-pressed',String(guestSubView===key));
   root.append(b);
  });
 }
 function renderView(){
- const guestTab=view==='guests'||view==='not-rsvp';
+ const guestTab=view==='guests';
  $('#guestSection').hidden=!guestTab;
  $('#lists').hidden=guestTab;
  if(guestTab)renderGuests();else renderList(Number(view));
@@ -92,9 +99,10 @@ function editGuest(index){const isNew=index===null, draft=isNew?Array(7).fill(''
  if(isNew)data.guests.push(draft);else data.guests[index]=draft;filter='all';changed();dialog.close();dialog.remove();renderTabs();renderGuests()},'primary'),button('Cancel',()=>{dialog.close();dialog.remove()}));dialog.append(actions);dialog.addEventListener('cancel',()=>dialog.remove());document.body.append(dialog);dialog.showModal();grid.querySelector('input').focus()}
 function renderGuests(){
  updatePaidTotal();
- const notRsvp=view==='not-rsvp',root=$('#guests'),totals=$('#totalEntries');
+ const notRsvp=guestSubView==='not-rsvp',root=$('#guests'),totals=$('#totalEntries');
+ renderGuestSubTabs();
  root.replaceChildren();totals.replaceChildren();
- $('#guestSectionTitle').textContent=notRsvp?'Not RSVP’d':'Guests & payments';
+ $('#guestSectionTitle').textContent='Guests & payments';
  $('#guestSectionDescription').textContent=notRsvp
   ?'Guests whose Google Guest List RSVP is marked No or has no confirmed response. Review their payment status, edit details, or confirm their RSVP. Website edits autosave to Cloudflare, not Google Sheets.'
   :'Mark payments, check RSVPs, and manage guest details. Blank payment statuses are shown as unknown.';
