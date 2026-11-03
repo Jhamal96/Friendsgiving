@@ -1,4 +1,4 @@
-import {reconcileTeams,formEligible,nameKey as eligibleKey,cleanName,firstName} from '../../_lib/team-eligibility.js';
+import {reconcileTeams,guestListEligible,nameKey as eligibleKey,cleanName,firstName} from '../../_lib/team-eligibility.js';
 import {readSquadRoles,squadRoleKey} from '../../_lib/squad-roles.js';
 // Admin team drafts are stored separately from published teams.
 // Public /api/teams reads only organizer_data.teams, never team_drafts.
@@ -42,7 +42,7 @@ export async function onRequestGet({request,env}){
    env.FRIENDSGIVING_DB.prepare('SELECT last_success_at,last_conflicts FROM sheet_sync_status WHERE id=1').first()
   ]);
   if(!draft||!current||!form)return reply({error:'Team drafts unavailable'},503);
-  const organizer=JSON.parse(current.content),formData=JSON.parse(form.data),matched=formEligible(organizer,formData);
+  const organizer=JSON.parse(current.content),formData=JSON.parse(form.data),matched=guestListEligible(organizer,formData);
   const roles=readSquadRoles(organizer.squadRoles),candidates=new Map(),captains=new Set();
   for(const p of matched.eligible){
    const key=squadRoleKey(p.name);
@@ -62,6 +62,7 @@ export async function onRequestGet({request,env}){
    guestGroups:matched.groups,
    isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
+   eligibilitySource:'guest-list',markedExcluded:matched.markedExcluded,paymentPending:matched.paymentPending,rsvpPending:matched.rsvpPending,bothPending:matched.bothPending,ambiguousNames:matched.ambiguousCount,
    paidCompanions:matched.eligible.filter(x=>x.method==='paid-companion').length,
    plusOnePlayers:matched.eligible.filter(x=>x.method==='paid-companion').map(x=>({
     name:x.name,
@@ -96,7 +97,7 @@ export async function onRequestPost({request,env}){
   ]);
   if(!organizer||!form)return reply({error:'Guest matching unavailable'},503);
   const orgData=JSON.parse(organizer.content);
-  const matched=formEligible(orgData,JSON.parse(form.data));
+  const matched=guestListEligible(orgData,JSON.parse(form.data));
   const roles=readSquadRoles(orgData.squadRoles);
   const eligible=new Set(matched.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   const canonical=name=>matched.aliases.get(eligibleKey(name))||eligibleKey(name);
@@ -117,7 +118,7 @@ export async function onRequestPost({request,env}){
     return reply({error:'Captains must remain on their own teams and cannot also appear in a member list.'},400);
   }
   for(const team of teams)for(const name of team.members){
-   if(!eligible.has(eligibleKey(name)))return reply({error:'Only eligible Playing guests and paid named companions may join teams; staff and non-players cannot: '+name},400);
+   if(!eligible.has(eligibleKey(name)))return reply({error:'Only active Guest List entries marked RSVP = Yes and Paid = Yes without * or staff roles can join a team: '+name},400);
   }
   const result=await env.FRIENDSGIVING_DB.prepare('UPDATE team_drafts SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(teams),body.revision).run();
   if(!result.meta.changes)return reply({error:'Team draft changed in another tab. Refresh to review the latest changes.'},409);
