@@ -68,15 +68,20 @@ export async function onRequestGet({env}){
     const paymentKey=String(record.sourceRow)+'|'+key;
     const paidThrough=paidByRowAndName.get(paymentKey)||null;
     const qualified=!!paidThrough;
+    const inviterReview=sponsorReviewByRow.get(record.sourceRow);
     const reviewCode=companionReviewByRowAndName.get(paymentKey)||
-     (sponsorReviewByRow.get(record.sourceRow)?.rsvpConfirmed===false?'inviter-rsvp-pending':'companion-payment-pending');
+     (inviterReview?.reason==='no-match'||inviterReview?.reason==='ambiguous-name'
+      ?'inviter-match-pending'
+      :inviterReview?.reason==='payment-or-rsvp-pending'&&inviterReview.rsvpConfirmed===false
+       ?'inviter-rsvp-pending':'companion-payment-pending');
     const issues={
      'companion-payment-pending':'Companion payment not confirmed',
      'duplicate-companion':'Duplicate first name; verify manually',
      'duplicate-payment':'Payment already linked to another companion',
      'ambiguous-payment':'More than one possible payment match',
      'ambiguous-sponsor':'More than one possible RSVP sponsor',
-     'inviter-rsvp-pending':'Inviter has not confirmed RSVP'
+     'inviter-rsvp-pending':'Inviter has not confirmed RSVP',
+     'inviter-match-pending':'Inviter must be matched to the Guest List'
     };
     plusOneMatches.push({
      sourceRow:record.sourceRow,
