@@ -28,7 +28,7 @@ form.addEventListener('submit',async e=>{
  const name=input.value.normalize('NFKC').trim().replace(/\s+/g,' ');
  clearResult();
  if(name.length<2){
-  notice.textContent='Enter your full name to find your team.';
+  notice.textContent='Enter your first name or full name to search.';
   input.focus();
   return;
  }
