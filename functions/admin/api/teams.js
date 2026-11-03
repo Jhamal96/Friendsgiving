@@ -52,8 +52,8 @@ export async function onRequestPost({request,env}){
   if(!Array.isArray(teams)||!teams.length||teams.length>32)return reply({error:'Create at least one team before publishing'},400);
   const ids=new Set(),assigned=new Set(),cleaned=[];
   const form=await env.FRIENDSGIVING_DB.prepare('SELECT data FROM friendsgiving_form_responses WHERE id=1').first();
-  if(!form)return reply({error:'Form responses unavailable'},503);
-  const eligibility=guestListEligible(data,JSON.parse(form.data));
+  // Form responses are optional companion labels, not an eligibility gate.
+  const eligibility=guestListEligible(data,form?.data?JSON.parse(form.data):{records:[]});
   const roles=readSquadRoles(data.squadRoles);
   const canonical=value=>eligibility.aliases.get(eligibleKey(value))||eligibleKey(value);
   // Captain names count as reserved players, even though they aren't duplicated in members.
