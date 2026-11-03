@@ -38,7 +38,7 @@ export async function onRequestGet({env}){
    const answer=String(record.plusOneYes||'').trim().toLowerCase();
    const hasCompanion=answer?['yes','true','1'].includes(answer):!!record.plusOne;
    if(!hasCompanion)continue;
-   const names=[record.plusOne,...String(record.additionalPlusOne||'').split(/[\\r\\n]+/)];
+   const names=[record.plusOne,...String(record.additionalPlusOne||'').split(String.fromCharCode(10))];
    for(const text of names){
     const companion=firstName(text),key=nameKey(companion);
     if(!key||key===nameKey(registered)||excluded.has(key))continue;
