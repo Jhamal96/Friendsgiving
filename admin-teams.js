@@ -74,7 +74,7 @@ function renderRoles(){
  }
  for(const person of entries){
   const key=roleNameKey(person.name),captain=roleCaptains.has(key),current=roles[key]||null;
-  const item=el('div','role-person'+(captain?' is-captain':current?' is-staff':''));
+  const item=el('div','role-person'+(captain?' is-captain':current?' is-staff':''));item.dataset.roleKey=key;
   const identity=el('div','role-person-info');
   identity.append(el('div','role-person-name',person.name));
   identity.append(el('small','role-person-meta',captain?'Team captain · must remain playing':(person.kind==='Plus-one'?'Paid named plus-one':'Registered guest')+' · '+roleLabel(current)));
@@ -108,6 +108,7 @@ function renderRoles(){
   });
   item.append(identity,controls);root.append(item);
  }
+ window.FriendsgivingSearch?.refresh();
 }
 async function setSquadRole(name,role,title=''){
  const feedback=$('roleStatus');
@@ -179,7 +180,7 @@ function render(){
  cards.replaceChildren();
  if(!teams.length)cards.append(el('p','empty','No teams in your draft yet. Create a team to begin.'));
  teams.forEach((team,index)=>{
-  const card=el('article','team-card');
+  const card=el('article','team-card');card.dataset.teamIndex=String(index);
   // Count unique assigned players in this box; the captain counts once.
   const captainKey=nameKey(team.captain);
   const memberKeys=new Set((team.members||[]).map(nameKey).filter(key=>key&&key!==captainKey));
@@ -204,6 +205,7 @@ function render(){
  });
  $('randomizeTeams').disabled=rolesBusy||teams.length<2||!guests.length;
  $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+new Set([t.captain,...t.members].map(nameKey).filter(Boolean)).size,0)+' assigned people (captains included)';
+ window.FriendsgivingSearch?.refresh();
 }
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
 function openEditor(index){
@@ -277,6 +279,37 @@ function openEditor(index){
  cancel.onclick=()=>modal.close();
  modal.showModal();area.querySelector('input').focus();
 }
+function teamsSearch(query,matches){
+ const result=[];
+ teams.forEach((team,index)=>{
+  const name=String(team.name||'Untitled team');
+  const captain=String(team.captain||'Unassigned');
+  const people=Array.isArray(team.members)?team.members:[];
+  const reveal=()=>window.FriendsgivingSearch?.navigate(cards.querySelector('[data-team-index="'+index+'"]'));
+  if(matches(query,name,team.caption,'team','captain',captain)){
+   result.push({title:name,detail:'Captain: '+captain+' · '+(people.length+(captain==='Unassigned'?0:1))+' players'+(team.caption?' · '+team.caption:''),group:'Team assignments',activate:reveal});
+  }
+  for(const person of people){
+   if(!matches(query,person))continue;
+   result.push({title:person,detail:'Playing on '+name+' team',group:'Team player',activate:reveal});
+  }
+ });
+ for(const person of roleCandidates){
+  const key=roleNameKey(person.name);
+  const job=roleLabel(roles[key]),captain=roleCaptains.has(key);
+  if(!matches(query,person.name,job,person.kind))continue;
+  result.push({
+   title:person.name,group:'Player & staff roles',
+   detail:captain?'Captain · Playing':(roles[key]?'Not playing · '+job:'Playing')+(person.kind==='Plus-one'?' · Plus-one':''),
+   activate:()=>{
+    $('roleSearch').value='';$('roleFilter').value='all';renderRoles();
+    window.FriendsgivingSearch?.navigate($('roleList').querySelector('[data-role-key="'+key+'"]'));
+   }
+  });
+ }
+ return result;
+}
+window.FriendsgivingSearch?.register(teamsSearch);
 function updateSourceStatus(result){
  const node=$('teamSourcesStatus'),info=result.syncSources||{};
  if(!node)return;
