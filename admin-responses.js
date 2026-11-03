@@ -26,7 +26,21 @@ async function load(){
    'payment-or-rsvp-pending':'RSVP and payment must both be Yes',
    'duplicate-first-name':'First name already used; distinguish before assigning'
   };
-  fill('reviewRows',d.review||[],r=>item('Response row '+r.sourceRow,reasons[r.status]||'Review original Form and Guest List'));
+  fill('reviewRows',d.review||[],r=>{
+   const heading=r.formHint?'Form: '+r.formHint:'Response row '+r.sourceRow;
+   let detail='Form row '+r.sourceRow+' · '+(reasons[r.status]||'Review the original Form and Guest List');
+   if(r.status==='payment-or-rsvp-pending'){
+    detail+=' · Guest: '+(r.guest||'Matched')+
+     ' · RSVP: '+(r.rsvpConfirmed?'Yes':'Not confirmed')+
+     ' · Paid: '+(r.paidConfirmed?'Yes':'Not confirmed');
+   }else if(Array.isArray(r.suggestedGuests)&&r.suggestedGuests.length){
+    detail+=' · Possible Guest List name'+(r.suggestedGuests.length===1?'':'s')+
+     ': '+r.suggestedGuests.join(', ')+' (verify manually)';
+   }else if(r.guest){
+    detail+=' · Guest: '+r.guest;
+   }
+   return item(heading,detail);
+  });
   fill('plusOneMatches',d.plusOneMatches||[],r=>{
    const name=r.guest||'Response row '+r.sourceRow;
    const paired=r.with?'With '+r.with+' · ':'';
