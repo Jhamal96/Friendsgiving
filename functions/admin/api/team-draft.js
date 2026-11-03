@@ -79,21 +79,19 @@ export async function onRequestPost({request,env}){
   const matched=formEligible(JSON.parse(organizer.content),JSON.parse(form.data));
   const eligible=new Set(matched.eligible.map(p=>eligibleKey(p.name)));
   const canonical=name=>matched.aliases.get(eligibleKey(name))||eligibleKey(name);
-  const captainOwners=new Map(),owners=new Map();
+  // Captains stay locked on their own teams. Every paid named companion is
+  // otherwise an independent player and may join a different team from
+  // their inviter, including via the Random Pick and Randomize controls.
+  const captainOwners=new Map();
   for(let i=0;i<teams.length;i++){
    const k=canonical(teams[i].captain);
-   if(k)captainOwners.set(k,i);
+   if(!k)continue;
+   if(captainOwners.has(k))return reply({error:'One captain cannot lead multiple teams'},400);
+   captainOwners.set(k,i);
   }
-  for(let i=0;i<teams.length;i++)for(const name of teams[i].members)owners.set(canonical(name),i);
-  for(const g of matched.groups){
-   const parent=canonical(g.primary);
-   const lead=captainOwners.get(parent),placement=owners.get(parent);
-   if(lead!==undefined&&placement!==undefined&&lead!==placement)return reply({error:'A captain cannot be a player on the opposing team: '+g.primary},400);
-   const home=lead??placement;
-   for(const companion of Array.isArray(g.companions)?g.companions:[]){
-    const child=canonical(companion),partnerOwner=captainOwners.get(child)??owners.get(child);
-    if(home!==undefined&&partnerOwner!==undefined&&home!==partnerOwner)return reply({error:'Keep '+companion+' with '+g.primary+' on the same team.'},400);
-   }
+  for(let i=0;i<teams.length;i++)for(const member of teams[i].members){
+   if(captainOwners.has(canonical(member)))
+    return reply({error:'Captains must remain on their own teams and cannot also appear in a member list.'},400);
   }
   for(const team of teams)for(const name of team.members){
    if(!eligible.has(eligibleKey(name)))return reply({error:'Only paid RSVP-confirmed guests or named paid companions with inviter RSVP can be added: '+name},400);
