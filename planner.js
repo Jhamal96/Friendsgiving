@@ -227,9 +227,9 @@ function renderGuests(){
   const amountCell=document.createElement('td'),amountInput=document.createElement('input');
   amountInput.className='guest-cell-amount';amountInput.type='text';amountInput.inputMode='decimal';
   amountInput.maxLength=30;amountInput.setAttribute('aria-label','Amount for '+row[0]);
-  const rawAmount=String(row[2]||'').trim();amountInput.value=/^\\d+(?:\\.\\d{1,2})?$/.test(rawAmount)?'$'+rawAmount:rawAmount;
+  const rawAmount=String(row[2]||'').trim();amountInput.value=/^\d+(?:\.\d{1,2})?$/.test(rawAmount)?'$'+rawAmount:rawAmount;
   amountInput.placeholder='$0';
-  amountInput.addEventListener('change',()=>{row[2]=amountInput.value.trim().replace(/^\\$/,'');changed();renderGuests()});
+  amountInput.addEventListener('change',()=>{row[2]=amountInput.value.trim().replace(/^\$/,'');changed();renderGuests()});
   amountCell.append(amountInput);tr.append(amountCell);
   for(const column of [3,4,5,6]){const cell=document.createElement('td');cell.append(guestSelect(row,column));tr.append(cell)}
   body.append(tr);shown++;
