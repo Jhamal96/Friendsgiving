@@ -139,7 +139,7 @@ function editGuest(index){
 function removeGuestEntry(index){
  const row=data.guests[index];if(!row||!row[0]?.trim())return;
  const name=String(row[0]).trim(),key=syncGuestKey(name);
- if(!confirm('Remove “'+name+'” from the Friendsgiving planner and playing teams? The original Google Sheet will not change. You can restore this entry under Guests & Payments → Removed.'))return;
+ if(!confirm('Remove “'+name+'” from the Friendsgiving website? This does not edit Google Sheets, so the guest will return at the next Sheet sync unless you also remove them from the original Guest List.'))return;
  if(!data.removedGuests||typeof data.removedGuests!=='object')data.removedGuests={};
  data.removedGuests[key]=row.slice();
  data.guests=data.guests.filter(g=>syncGuestKey(g?.[0])!==key);
@@ -162,7 +162,7 @@ function renderGuests(){
   ?'Entries removed from Friendsgiving remain here for restoration. They are not deleted from Google Sheets and will not be reimported while removed.'
   :notRsvp
   ?'Guests without a confirmed RSVP. Confirm, edit, or remove unwanted entries; removed guests stay hidden from future Google Sheet syncs.'
-  :'Mark payments, check RSVPs, and manage guest details. Blank payment statuses are shown as unknown.';
+  :'Google Sheets is the source of truth for guest details. Website changes can be replaced by the next Sheet sync. Both views reflect the current cloud Guest List.';
  $('#paidTotal').hidden=notRsvp||removed;
  $('#filters').hidden=notRsvp||removed;
  $('#addGuestToolbar').hidden=notRsvp||removed;
@@ -329,7 +329,7 @@ function plannerSearch(query,matches){
  return found;
 }
 window.FriendsgivingSearch?.register(plannerSearch);
-async function start(){try{const r=await fetch('/admin/api/planner',{cache:'no-store'});if(!r.ok)throw Error('Unable to load planner. Please refresh.');const out=await r.json();data=out.data;rev=out.revision;if(!data||!Array.isArray(data.planning)||!Array.isArray(data.guests))throw Error('Planner data unavailable.');data.completion=data.completion||{};renderTabs();renderView();$('#save').disabled=false;$('#notice').textContent='Autosave on · Guest, payment and planning edits save to Cloudflare. They do not write back to Google Sheets.'}catch(e){$('#notice').textContent=e.message}}
+async function start(){try{const r=await fetch('/admin/api/planner',{cache:'no-store'});if(!r.ok)throw Error('Unable to load planner. Please refresh.');const out=await r.json();data=out.data;rev=out.revision;if(!data||!Array.isArray(data.planning)||!Array.isArray(data.guests))throw Error('Planner data unavailable.');data.completion=data.completion||{};renderTabs();renderView();$('#save').disabled=false;$('#notice').textContent='Google Sheets is the Guest List source of truth. Website edits save to Cloudflare, but the next Sheet sync will replace guest details with the Sheet values. Team eligibility follows RSVP and Paid on the Sheet.'}catch(e){$('#notice').textContent=e.message}}
 async function refreshSheetSyncStatus(){
  const el=$('#sheetSyncStatus');if(!el)return;
  el.textContent='Checking synchronization status…';
