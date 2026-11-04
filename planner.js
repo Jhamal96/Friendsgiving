@@ -71,11 +71,14 @@ function guestEntries(){
   duplicateCount++;
   const slot=lookup.get(key),prev=entries[slot];
   if(normalizeRow(prev.row)!==normalizeRow(row))conflicts++;
-  const source=baseline[key];
-  // If one of the duplicates is the latest Google Sheet row, display it.
-  const sourceKey=Array.isArray(source)?normalizeRow(source):null;
-  const prevScore=sourceKey&&normalizeRow(prev.row)===sourceKey?100:prev.row.filter(Boolean).length;
-  const nextScore=sourceKey&&normalizeRow(row)===sourceKey?100:row.filter(Boolean).length;
+  // Prefer the row that is still present on the active Google Guest List,
+  // including starred-name edits; guestKey intentionally ignores * for dedup.
+  const latestSourceRow=baseline[syncGuestKey(row[0])]||baseline[syncGuestKey(prev.row[0])];
+  const sourceKey=Array.isArray(latestSourceRow)?normalizeRow(latestSourceRow):null;
+  const prevActive=Object.hasOwn(baseline,syncGuestKey(prev.row[0]))?50:0;
+  const nextActive=Object.hasOwn(baseline,syncGuestKey(row[0]))?50:0;
+  const prevScore=prevActive+(sourceKey&&normalizeRow(prev.row)===sourceKey?100:0)+prev.row.filter(Boolean).length;
+  const nextScore=nextActive+(sourceKey&&normalizeRow(row)===sourceKey?100:0)+row.filter(Boolean).length;
   if(nextScore>prevScore)entries[slot]={row,index};
  }
  return {entries,duplicateCount,conflicts};
@@ -341,22 +344,43 @@ async function refreshSheetSyncStatus(){
   }
  }catch{el.textContent='Initial snapshot imported; automatic synchronization status is temporarily unavailable.'}
 }
-// Keep the not-RSVP list aligned with Google Sheet updates and other admins.
-// Never overwrite unsaved local edits or an open guest-editing dialog.
-setInterval(async()=>{
- if(document.hidden||dirty||saving||blocked||!data||document.querySelector('dialog[open]'))return;
+// Both guest views use organizer_data.guests and reload together. Cloud changes
+// can originate from the authorized Google Sheet sync or another organizer.
+// Never overwrite unsaved edits, an open dialog or a focused table input.
+let cloudRefreshRunning=false;
+async function refreshPlannerFromCloud(manual=false){
+ const button=$('#refreshGuestCloud');
+ if(cloudRefreshRunning||!data)return;
+ if(dirty||saving||blocked||document.querySelector('dialog[open]')||
+    document.activeElement?.closest('#guestTable')){
+  if(manual)status.textContent='Finish saving or editing a guest before refreshing from the cloud.';
+  return;
+ }
+ cloudRefreshRunning=true;
+ if(button)button.disabled=true;
+ if(manual)status.textContent='Checking the latest Guest List…';
  try{
   const response=await fetch('/admin/api/planner',{cache:'no-store'});
-  if(!response.ok)return;
+  if(!response.ok)throw Error('Guest List could not be refreshed.');
   const result=await response.json();
-  if(!Number.isSafeInteger(result.revision)||result.revision===rev||!Array.isArray(result.data?.guests)||!Array.isArray(result.data?.planning))return;
-  if(dirty||saving||blocked)return;
-  data=result.data;rev=result.revision;data.completion=data.completion||{};
-  renderTabs();renderView();window.FriendsgivingSearch?.refresh();
-  status.textContent='✓ Guest List refreshed from cloud';
- }catch{}
-},60000);
-const checkSync=$('#checkSheetSync');if(checkSync)checkSync.addEventListener('click',refreshSheetSyncStatus);
+  if(!Number.isSafeInteger(result.revision)||!Array.isArray(result.data?.guests)||!Array.isArray(result.data?.planning))
+   throw Error('Guest List response was incomplete.');
+  if(dirty||saving||blocked||document.querySelector('dialog[open]')||
+     document.activeElement?.closest('#guestTable'))return;
+  if(result.revision!==rev){
+   data=result.data;rev=result.revision;data.completion=data.completion||{};
+   renderTabs();renderView();window.FriendsgivingSearch?.refresh();
+   status.textContent='✓ Guest cards and spreadsheet view refreshed from the cloud';
+  }else if(manual)status.textContent='✓ Guest List is up to date';
+ }catch(err){if(manual)status.textContent='⚠ '+err.message}
+ finally{cloudRefreshRunning=false;if(button)button.disabled=false}
+}
+setInterval(()=>{if(!document.hidden)refreshPlannerFromCloud()},30000);
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden){refreshPlannerFromCloud();refreshSheetSyncStatus()}
+});
+const checkSync=$('#checkSheetSync');if(checkSync)checkSync.addEventListener('click',()=>{refreshSheetSyncStatus();refreshPlannerFromCloud()});
+const refreshCloud=$('#refreshGuestCloud');if(refreshCloud)refreshCloud.addEventListener('click',()=>{refreshPlannerFromCloud(true);refreshSheetSyncStatus()});
 refreshSheetSyncStatus();
 $('#addGuest').addEventListener('click',()=>{if(data)editGuest(null)});
 $('#save').addEventListener('click',()=>{if(blocked){status.textContent='⚠ Reload this page to review changes made elsewhere.';return}dirty=true;saveChanges()});
