@@ -331,6 +331,7 @@ function teamsSearch(query,matches){
    title:person.name,group:'Player & staff roles',
    detail:captain?'Captain · Playing':(roles[key]?'Not playing · '+job:'Playing')+(person.kind==='Plus-one'?' · Plus-one':''),
    activate:()=>{
+    $('squadRolesSection').open=true;
     $('roleSearch').value='';$('roleFilter').value='all';renderRoles();
     window.FriendsgivingSearch?.navigate($('roleList').querySelector('[data-role-key="'+key+'"]'));
    }
