@@ -118,7 +118,7 @@ export async function onRequestPost({request,env}){
     return reply({error:'Captains must remain on their own teams and cannot also appear in a member list.'},400);
   }
   for(const team of teams)for(const name of team.members){
-   if(!eligible.has(eligibleKey(name)))return reply({error:'Only active Guest List entries marked RSVP = Yes and Paid = Yes without * or staff roles can join a team: '+name},400);
+   if(!eligible.has(eligibleKey(name)))return reply({error:'Only active Guest List entries marked RSVP = Yes and Paid = Yes and without staff roles can join a team: '+name},400);
   }
   const result=await env.FRIENDSGIVING_DB.prepare('UPDATE team_drafts SET content=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND revision=?').bind(JSON.stringify(teams),body.revision).run();
   if(!result.meta.changes)return reply({error:'Team draft changed in another tab. Refresh to review the latest changes.'},409);
