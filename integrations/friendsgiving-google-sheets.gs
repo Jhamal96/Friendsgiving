@@ -15,10 +15,23 @@ function pushFriendsgiving(){
   if(!token)throw new Error('Add FRIENDSGIVING_SYNC_TOKEN in Apps Script Project Settings > Script Properties before syncing.');
   const sheet=SpreadsheetApp.openById(FG_SPREADSHEET_ID).getSheetByName(FG_TAB);
   if(!sheet)throw new Error('Guest List tab not found.');
-  const count=Math.max(sheet.getLastRow()-1,0);
-  if(count<1)throw new Error('No guest entries. Refusing to synchronize an empty guest list.');
-  const rows=sheet.getRange(2,1,Math.min(500,count),7).getDisplayValues().map(r=>r.map(v=>String(v||'').trim())).filter(r=>r[0]);
-  if(!rows.length)throw new Error('No valid guest names found.');
+  // The live spreadsheet has search cells and a heading above the actual
+  // guest rows. Detect the header instead of assuming the list starts at row 2.
+  const rowCount=sheet.getLastRow();
+  if(rowCount<5)throw new Error('Guest List appears empty or incomplete.');
+  const raw=sheet.getRange(1,1,Math.min(520,rowCount),7).getDisplayValues();
+  const headerIndex=raw.findIndex(r=>
+   String(r[0]||'').trim().toLowerCase()==='guests'&&
+   String(r[2]||'').trim().toLowerCase()==='amount'&&
+   String(r[4]||'').trim().toLowerCase()==='paid'
+  );
+  if(headerIndex<0)throw new Error('Guest List column headings were not found. Check the sheet structure.');
+  const rows=raw.slice(headerIndex+1)
+   .map(r=>r.map(v=>String(v||'').trim()))
+   .filter(r=>r[0]&&!/^(?:total|total received):?$/i.test(r[0]));
+  if(!rows.length||rows.length>500)throw new Error('Invalid guest count; refusing an incomplete sync.');
+  const unique=new Set(rows.map(r=>r[0].toLocaleLowerCase('en-US')));
+  if(unique.size!==rows.length)throw new Error('Duplicate guest names; please resolve them in the original Guest List.');
   const reply=UrlFetchApp.fetch(FG_ENDPOINT,{
    method:'post',contentType:'application/json',
    headers:{'X-Friendsgiving-Sheet-Sync':token},
