@@ -150,9 +150,10 @@ function restoreGuestEntry(key){
 }
 function renderGuests(){
  updatePaidTotal();
- const notRsvp=guestSubView==='not-rsvp',removed=guestSubView==='removed',root=$('#guests'),totals=$('#totalEntries');
+ const notRsvp=guestSubView==='not-rsvp',removed=guestSubView==='removed',root=$('#guests'),tableRoot=$('#guestTable'),tableDetails=$('#guestTableDetails'),totals=$('#totalEntries');
  renderGuestSubTabs();
- root.replaceChildren();totals.replaceChildren();
+ root.replaceChildren();tableRoot.replaceChildren();totals.replaceChildren();
+ tableDetails.hidden=removed;
  $('#guestSectionTitle').textContent='Guests & payments';
  $('#guestSectionDescription').textContent=removed
   ?'Entries removed from Friendsgiving remain here for restoration. They are not deleted from Google Sheets and will not be reimported while removed.'
@@ -220,6 +221,40 @@ function renderGuests(){
    totals.append(line);return;
   }
   if(!row[0].trim()||notRsvp&&rsvpConfirmed(row)||!notRsvp&&filter!=='all'&&filter!==payment)return;
+  // Original guest card view: always visible, with one shared source row.
+  // The collapsible spreadsheet below reads and edits this exact same row.
+  const card=document.createElement('article');card.className='guest';card.dataset.guestIndex=String(i);
+  const heading=document.createElement('h3');heading.className='guest-name';heading.textContent=row[0];
+  const badge=document.createElement('span');
+  badge.className='badge '+(notRsvp?'rsvp-pending':payment);
+  badge.textContent=notRsvp?rsvpStatus(row):({paid:'Paid',unpaid:'Unpaid',unknown:'Unknown',waived:'Waived'}[payment]);
+  heading.append(' ',badge);card.append(heading);
+  const fields=notRsvp
+   ?[[3,'RSVP'],[4,'Paid'],[2,'Amount'],[5,'Paid via']]
+   :[[2,'Amount'],[3,'RSVP'],[5,'Paid via'],[6,'Shirt size']];
+  const grid=document.createElement('div');grid.className='guest-fields';
+  for(const [column,label] of fields){
+   const item=document.createElement('div');item.className='guest-field';
+   const caption=document.createElement('small');caption.textContent=label;
+   const value=document.createElement('strong');value.textContent=row[column]||'Not provided';
+   item.append(caption,value);grid.append(item);
+  }
+  card.append(grid);
+  const actions=document.createElement('div');actions.className='guest-actions';
+  if(notRsvp){
+   actions.append(button('Confirm RSVP',()=>{
+    row[3]='Yes';changed();renderTabs();renderGuests();
+   },'primary'),button('Edit details',()=>editGuest(i)));
+  }else{
+   actions.append(
+    button('Edit details',()=>editGuest(i)),
+    button('Mark paid',()=>{row[4]='Yes';changed();renderGuests()},'primary'),
+    button('Mark unpaid',()=>{row[4]='No';changed();renderGuests()}),
+    button('Clear payment status',()=>{row[4]='';changed();renderGuests()})
+   );
+  }
+  actions.append(button('Remove entry',()=>removeGuestEntry(i),'danger'));
+  card.append(actions);root.append(card);
   const tr=document.createElement('tr');tr.className=rsvpConfirmed(row)&&payment==='paid'?'guest-ready':'guest-waiting';
   tr.dataset.guestIndex=String(i);
   const nameCell=document.createElement('td'),nameButton=button(row[0],()=>editGuest(i),'guest-name-button');
@@ -238,12 +273,16 @@ function renderGuests(){
  if(shown){
   const wrap=document.createElement('div');wrap.className='guest-table-wrap';wrap.setAttribute('role','region');
   wrap.setAttribute('aria-label','Guest list — edit guest names or adjust cells');wrap.tabIndex=0;
-  wrap.append(table);root.append(wrap);
+  wrap.append(table);tableRoot.append(wrap);
  }else{
   const p=document.createElement('p');p.className='muted';
   p.textContent=notRsvp?'Everyone on the Guest List has a confirmed RSVP.':'No guests in this view.';
   root.append(p);
+  const tableEmpty=document.createElement('p');tableEmpty.className='muted';tableEmpty.style.padding='0 16px 14px';
+  tableEmpty.textContent=p.textContent;tableRoot.append(tableEmpty);
  }
+ const subtitle=tableDetails.querySelector('.guest-table-label small');
+ if(subtitle)subtitle.textContent='('+shown+' '+(shown===1?'guest':'guests')+' · quick edit)';
  $('#sheetTotal').hidden=notRsvp||!totals.children.length;
 }
 function plannerSearch(query,matches){
