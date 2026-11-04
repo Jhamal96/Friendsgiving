@@ -81,7 +81,7 @@ export async function onRequestPost({request,env}){
   }
   const eligible=new Set(eligibility.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
-   if(!eligible.has(eligibleKey(member)))return reply({error:'Only Guest List players with both RSVP = Yes and Paid = Yes and without * or a non-playing role can be published: '+member},400);
+   if(!eligible.has(eligibleKey(member)))return reply({error:'Only Guest List players with both RSVP = Yes and Paid = Yes and a playing role can be published: '+member},400);
   }
   // Verify all eligible individual players, including paid plus-ones, and keep teams balanced before publishing.
   const balanced=balanceTeams(cleaned,eligibility,roles);
