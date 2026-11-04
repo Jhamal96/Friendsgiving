@@ -1,5 +1,6 @@
 import {reconcileTeams,guestListEligible,nameKey as eligibleKey,cleanName,firstName} from '../../_lib/team-eligibility.js';
 import {readSquadRoles,squadRoleKey} from '../../_lib/squad-roles.js';
+import {cleanCaptainPhoto} from '../../_lib/captain-photo.js';
 // Admin team drafts are stored separately from published teams.
 // Public /api/teams reads only organizer_data.teams, never team_drafts.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -27,7 +28,9 @@ const validTeams=input=>{
    if(used.has(key))return null;
    used.add(key);members.push(v);
   }
-  output.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),members});
+  const captainPhoto=cleanCaptainPhoto(t.captainPhoto);
+  if(captainPhoto===null)return null;
+  output.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),captainPhoto,members});
  }
  return output;
 };
@@ -86,7 +89,7 @@ export async function onRequestPost({request,env}){
  if(!String(request.headers.get('Content-Type')||'').startsWith('application/json'))return reply({error:'JSON required'},415);
  try{
   const raw=await request.text();
-  if(raw.length>100000)return reply({error:'Draft too large'},413);
+  if(raw.length>1200000)return reply({error:'Draft or portraits too large. Choose smaller captain photos.'},413);
   const body=JSON.parse(raw);
   if(!Number.isSafeInteger(body.revision)||body.revision<1)return reply({error:'Invalid draft revision'},400);
   const teams=validTeams(body.teams);
