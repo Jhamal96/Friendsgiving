@@ -1,5 +1,6 @@
 import {guestListEligible,nameKey as eligibleKey,cleanName,balanceTeams} from '../../_lib/team-eligibility.js';
 import {readSquadRoles,squadRoleKey} from '../../_lib/squad-roles.js';
+import {cleanCaptainPhoto} from '../../_lib/captain-photo.js';
 // Admin-side team management. The public endpoint never returns planner/payment details.
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
@@ -16,7 +17,7 @@ const confirmedGuests=data=>{
  }
  return Array.from(names.values()).slice(0,500).sort((a,b)=>a.localeCompare(b));
 };
-const safeTeams=teams=>Array.isArray(teams)?teams.map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,members:t.members})).filter(t=>t&&typeof t.name==='string'):[];
+const safeTeams=teams=>Array.isArray(teams)?teams.filter(t=>t&&typeof t.name==='string').map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,captainPhoto:cleanCaptainPhoto(t.captainPhoto)||'',members:t.members})):[];
 export async function onRequestGet({request,env}){
  try{
   if(!validHost(new URL(request.url).hostname))return reply({error:'Invalid host'},403);
@@ -32,7 +33,7 @@ export async function onRequestPost({request,env}){
  if(!String(request.headers.get('Content-Type')||'').startsWith('application/json'))return reply({error:'JSON required'},415);
  try{
   const raw=await request.text();
-  if(raw.length>100000)return reply({error:'Request too large'},413);
+  if(raw.length>1200000)return reply({error:'Team roster or captain portraits too large'},413);
   const {action='publish',teams,revision}=JSON.parse(raw);
   if(!Number.isSafeInteger(revision)||revision<0)return reply({error:'Invalid revision'},400);
   if(!['publish','unpublish'].includes(action))return reply({error:'Invalid action'},400);
@@ -77,7 +78,9 @@ export async function onRequestPost({request,env}){
     if(assigned.has(key))return reply({error:'A guest can only belong to one team: '+name},400);
     assigned.add(key);members.push(name);
    }
-   cleaned.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),members});
+   const captainPhoto=cleanCaptainPhoto(t.captainPhoto);
+   if(captainPhoto===null)return reply({error:'Invalid or oversized captain photo for '+clean(t.name)},400);
+   cleaned.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),captainPhoto,members});
   }
   const eligible=new Set(eligibility.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
