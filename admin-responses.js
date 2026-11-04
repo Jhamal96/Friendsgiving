@@ -205,7 +205,7 @@ async function load(silent=false){
   fill('matchedNames',d.matched||[],r=>item(r.guest,'Source row '+r.sourceRow+' · '+r.matchMethod+
    ' · '+(r.team?'Assigned to '+r.team+' team'+(d.isPublished?' (published)':' (private draft)')
       :r.teamEligible?'Eligible on Guest List; awaiting team assignment'
-      :r.isCaptain?'Locked team captain':'Form matched; not eligible until Guest List shows RSVP = Yes and Paid = Yes without *')));
+      :r.isCaptain?'Locked team captain':'Form matched; not eligible until Guest List shows RSVP = Yes and Paid = Yes regardless of an asterisk')));
   const reasons={
    'no-match':'Name not found in Guest List',
    'ambiguous-name':'Multiple possible guest matches; verify manually',
@@ -243,7 +243,7 @@ async function load(silent=false){
    ?' Both connections are receiving updates.'
    :' At least one source has not checked in recently; review the Apps Script triggers in Settings.')+
    (d.syncConflicts?' '+d.syncConflicts+' Guest List conflicts need review.':'')+
-   ' '+d.eligibleParticipantCount+' eligible Guest List entries (RSVP = Yes, Paid = Yes; starred entries excluded). Teams are '+(d.isPublished?'published.':'unpublished.');
+   ' '+d.eligibleParticipantCount+' eligible Guest List entries (RSVP = Yes, Paid = Yes; asterisks do not affect eligibility). Teams are '+(d.isPublished?'published.':'unpublished.');
   considerUpdate(d.changeSnapshot);
   window.FriendsgivingSearch?.refresh();
  }catch{if(!silent)$('responseStatus').textContent='Unable to load response matching. Reload or check connections in Settings.'}
