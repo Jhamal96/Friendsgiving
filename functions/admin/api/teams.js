@@ -17,7 +17,7 @@ const confirmedGuests=data=>{
  }
  return Array.from(names.values()).slice(0,500).sort((a,b)=>a.localeCompare(b));
 };
-const safeTeams=teams=>Array.isArray(teams)?teams.filter(t=>t&&typeof t.name==='string').map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,captainPhoto:cleanCaptainPhoto(t.captainPhoto)||'',members:t.members})):[];
+const safeTeams=teams=>Array.isArray(teams)?teams.filter(t=>t&&typeof t.name==='string').map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,...(Object.hasOwn(t,'captainPhoto')?{captainPhoto:cleanCaptainPhoto(t.captainPhoto)||''}:{}),members:t.members})):[];
 export async function onRequestGet({request,env}){
  try{
   if(!validHost(new URL(request.url).hostname))return reply({error:'Invalid host'},403);
