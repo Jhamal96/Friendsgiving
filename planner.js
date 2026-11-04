@@ -338,9 +338,17 @@ async function refreshSheetSyncStatus(){
   if(!response.ok)throw Error('Status unavailable');
   const state=await response.json();
   if(state.lastSuccessAt){
-   el.textContent='Automatic Sheets → Friendsgiving sync active. Last checked: '+new Date(state.lastSuccessAt).toLocaleString()+'. Last run: '+state.lastChanges+' changed fields or new guests'+(state.conflicts?' · '+state.conflicts+' conflict(s) need review.':'.');
+   const last=new Date(state.lastSuccessAt),age=Math.max(0,Math.round((Date.now()-last.getTime())/60000));
+   const stale=!Number.isFinite(last.getTime())||age>20;
+   el.textContent=(stale?'⚠ Guest List sync overdue':'✓ Google Guest List sync healthy')+
+    ' · '+(state.activeGuests??'?')+' active Sheet guests · Last synced: '+
+    last.toLocaleString()+' ('+age+' min ago)'+
+    ' · '+state.lastChanges+' recent changes'+
+    (state.conflicts?' · '+state.conflicts+' conflicts':' · No conflicts')+
+    (state.lastError?' · Error: '+state.lastError:'')+
+    (stale?' · Check the Google Apps Script authorization and trigger.':'.');
   }else{
-   el.textContent='Initial guest snapshot imported. Automatic synchronization is awaiting the one-time Google Apps Script authorization.';
+   el.textContent='⚠ Google Guest List has not synchronized yet. Check the Google Apps Script trigger and authorization.';
   }
  }catch{el.textContent='Initial snapshot imported; automatic synchronization status is temporarily unavailable.'}
 }
