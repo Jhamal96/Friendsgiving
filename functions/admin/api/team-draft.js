@@ -65,7 +65,7 @@ export async function onRequestGet({request,env}){
    guestGroups:matched.groups,
    isPublished:organizer.teamsPublished===true||(organizer.teamsPublished!==false&&Array.isArray(organizer.teams)&&organizer.teams.length>0),
    eligible:matched.eligible.length,matchingReview:matched.reviewCount,matchingSource:matched.sourceCount,
-   eligibilitySource:'guest-list',markedExcluded:matched.markedExcluded,paymentPending:matched.paymentPending,rsvpPending:matched.rsvpPending,bothPending:matched.bothPending,ambiguousNames:matched.ambiguousCount,
+   eligibilitySource:'guest-list',markedExcluded:matched.markedExcluded,markedIncluded:matched.markedIncluded,paymentPending:matched.paymentPending,rsvpPending:matched.rsvpPending,bothPending:matched.bothPending,ambiguousNames:matched.ambiguousCount,
    paidCompanions:matched.eligible.filter(x=>x.method==='paid-companion').length,
    plusOnePlayers:matched.eligible.filter(x=>x.method==='paid-companion').map(x=>({
     name:x.name,
