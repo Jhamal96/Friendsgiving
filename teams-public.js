@@ -60,7 +60,32 @@ form.addEventListener('submit',async e=>{
   header.append(el('span','roster-index','YOUR ASSIGNMENT'));
   header.append(el('h3','roster-name',result.team));
   card.append(header);
-  card.append(el('p','roster-captain','★ TEAM CAPTAIN: '+result.captain));
+  const gamer=el('section','captain-gamer-card');
+  gamer.setAttribute('aria-label','Team captain gamer card');
+  const portrait=el('div','captain-gamer-portrait');
+  const imgData=String(result.captainPhoto||'');
+  const fallback=()=>{
+   portrait.replaceChildren();
+   const initials=String(result.captain||'?').trim().split(/\s+/).slice(0,2).map(part=>part.charAt(0).toUpperCase()).join('')||'?';
+   portrait.append(el('span','captain-gamer-initials',initials));
+  };
+  if(/^data:image\/(?:jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(imgData)&&imgData.length<=32000){
+   const img=el('img','captain-gamer-image');
+   img.src=imgData;img.alt='Portrait of team captain '+result.captain;
+   img.width=280;img.height=280;img.decoding='async';
+   img.addEventListener('error',fallback,{once:true});
+   portrait.append(img);
+  }else fallback();
+  const info=el('div','captain-gamer-info');
+  info.append(el('span','captain-gamer-eyebrow','★ SQUAD COMMAND / CAPTAIN'));
+  info.append(el('h4','captain-gamer-name',result.captain||'To be announced'));
+  info.append(el('p','captain-gamer-rank','TEAM LEADER · FRIENDSGIVING 2026'));
+  if(typeof result.caption==='string'&&result.caption.trim()){
+   info.append(el('p','captain-gamer-motto',result.caption.slice(0,220)));
+  }
+  const status=el('div','captain-gamer-footer','PLAYER ID VERIFIED  //  TEAM '+String(result.team||'').toUpperCase());
+  gamer.append(portrait,info,status);
+  card.append(gamer);
   root.replaceChildren(card);
   notice.textContent='Your team assignment';
  }catch(err){
