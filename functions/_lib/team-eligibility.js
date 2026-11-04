@@ -307,7 +307,7 @@ export function guestListEligible(organizer,form={}){
  for(const row of Array.isArray(organizer?.guests)?organizer.guests:[]){
   if(!Array.isArray(row))continue;
   const raw=String(row[0]||'').trim(),sourceKey=raw.toLocaleLowerCase('en-US');
-  if(!sourceKey||activeSource&&!activeSource.has(sourceKey)||Object.hasOwn(removed,sourceKey))continue;
+  if(!sourceKey||(activeSource?!activeSource.has(sourceKey):Object.hasOwn(removed,sourceKey)))continue;
   if(sourceNames.has(sourceKey)){duplicateRows++;continue}
   sourceNames.add(sourceKey);
   if(raw.includes('*'))markedIncluded++;
