@@ -249,6 +249,50 @@ function render(){
  $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+new Set(allAssigned).size+' unique assigned people'+(duplicates?' · ⚠ '+duplicates+' duplicate assignments':' · ✓ No duplicates');
  window.FriendsgivingSearch?.refresh();
 }
+// The organizer-only printable roster always reflects the current team draft.
+// No roster is sent to the public API or another service; PDF comes from Print.
+const listDialog=$('teamListDialog'),listContents=$('teamListContents');
+function showPrintableTeams(){
+ if(!teams.length){status.textContent='Create a team before opening the roster list.';return}
+ listContents.replaceChildren();
+ const grid=el('div','team-list-grid'),allKeys=new Set(),duplicates=[];
+ let total=0;
+ teams.forEach((team,index)=>{
+  const article=el('section','team-list-entry');
+  const head=el('div','team-list-entry-header');
+  head.append(el('h3','',team.name||'Team '+(index+1)));
+  const captain=String(team.captain||'').trim();
+  const members=Array.isArray(team.members)?team.members.filter(n=>String(n).trim()):[];
+  const people=[...(captain?[{name:captain,captain:true}]:[]),...members.map(name=>({name,captain:false}))];
+  head.append(el('p','',people.length+' '+(people.length===1?'player':'players')+' · Captain: '+(captain||'Not assigned')));
+  if(team.caption?.trim())head.append(el('p','team-list-motto',team.caption.trim()));
+  article.append(head);
+  const list=el('ol','team-list-people');
+  for(const person of people){
+   const key=canonical(person.name);
+   if(key&&allKeys.has(key))duplicates.push(person.name);
+   if(key)allKeys.add(key);
+   total++;
+   const li=el('li',person.captain?'team-list-captain':'');
+   li.append(document.createTextNode(person.name));
+   if(person.captain)li.append(el('span','','★ Captain'));
+   list.append(li);
+  }
+  if(!people.length)list.append(el('li','','No players assigned'));
+  article.append(list);grid.append(article);
+ });
+ listContents.append(grid);
+ if(duplicates.length){
+  const warning=el('p','team-list-warning','⚠ '+duplicates.length+' duplicate '+(duplicates.length===1?'assignment':'assignments')+' found. Review the teams before printing or publishing.');
+  listContents.prepend(warning);
+ }
+ const state=dirty||saving?'Unsaved edits — print preview of current draft':isPublished&&serial(teams)===publishedBaseline?'Published teams':'Private draft — not yet published';
+ $('teamListMeta').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+allKeys.size+' unique players · '+state;
+ listDialog.showModal();
+}
+$('seeTeams').addEventListener('click',showPrintableTeams);
+$('closeTeamList').addEventListener('click',()=>listDialog.close());
+$('printTeamList').addEventListener('click',()=>window.print());
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
 function openEditor(index){
  const creating=index===null;
