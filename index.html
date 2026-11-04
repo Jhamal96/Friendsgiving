@@ -283,6 +283,9 @@ body>main #teams .team-lookup-card .captain-gamer-card{
  --captain-accent:#ffdb53;
  position:relative;isolation:isolate;display:grid;grid-template-columns:155px minmax(0,1fr);
  align-items:stretch;gap:0;overflow:hidden;margin-top:17px;
+ /* Override the generic page-wide section padding that created empty space
+    above and below the captain portrait inside the gamer card. */
+ padding:0;min-height:0;
  border:1px solid var(--captain-accent);border-radius:11px;
  background:linear-gradient(125deg,#102f50 0%,#07172c 88%);
  color:#f6f9ff;text-shadow:none;box-shadow:0 15px 30px #0005,0 0 0 3px #ffdb5320 inset;
@@ -293,7 +296,7 @@ body>main #teams .team-lookup-card .captain-gamer-card::before{
 }
 body>main #teams .captain-gamer-portrait{
  position:relative;display:flex;align-items:center;justify-content:center;
- min-height:172px;background:radial-gradient(circle at 48% 32%,#4b6c8a,#10253f 65%,#06101f);
+ min-height:172px;align-self:stretch;background:radial-gradient(circle at 48% 32%,#4b6c8a,#10253f 65%,#06101f);
  border-right:2px solid var(--captain-accent);
  overflow:hidden;
 }
@@ -302,7 +305,7 @@ body>main #teams .captain-gamer-portrait::after{
  clip-path:polygon(0 0,18% 0,18% 2px,82% 2px,82% 0,100% 0,100% 100%,82% 100%,82% calc(100% - 2px),18% calc(100% - 2px),18% 100%,0 100%);
 }
 body>main #teams .captain-gamer-image{
- display:block;width:100%;height:100%;min-height:172px;object-fit:cover;object-position:center;
+ position:absolute;inset:0;display:block;width:100%;height:100%;min-height:0;object-fit:cover;object-position:center;
 }
 body>main #teams .captain-gamer-initials{font:900 clamp(3rem,7vw,4.5rem)/1 Impact,'Arial Narrow',sans-serif;color:#ffe487;letter-spacing:.05em;text-shadow:0 0 20px #dfc65a7c}
 body>main #teams .captain-gamer-info{min-width:0;padding:20px 17px 12px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
@@ -315,8 +318,8 @@ body>main #teams .team-lookup-card.team-lookup-blue .captain-gamer-card{--captai
 body>main #teams .team-lookup-card.team-lookup-yellow .captain-gamer-card{--captain-accent:#ffe46c}
 @media(max-width:460px){
  body>main #teams .team-lookup-card .captain-gamer-card{grid-template-columns:1fr}
- body>main #teams .captain-gamer-portrait{height:200px;border-right:0;border-bottom:2px solid var(--captain-accent)}
- body>main #teams .captain-gamer-image{height:200px;min-height:200px}
+ body>main #teams .captain-gamer-portrait{height:220px;min-height:220px;border-right:0;border-bottom:2px solid var(--captain-accent)}
+ body>main #teams .captain-gamer-image{height:100%;min-height:0}
  body>main #teams .captain-gamer-info{padding:16px 17px 18px}
  body>main #teams .captain-gamer-name{font-size:2rem}
 }
