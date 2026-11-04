@@ -1,6 +1,6 @@
 /* Accessible, mobile-friendly Friendsgiving emoji editor */
 .fg-emoji-launch,.fg-emoji-near{cursor:pointer;font-family:system-ui,sans-serif;touch-action:manipulation}
-.admin-top .fg-emoji-launch{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-height:44px;border:1px solid #7798b9;border-radius:9px;background:#17395c;color:#ffe38b;font-size:23px;line-height:1;padding:0}
+.admin-top .fg-emoji-launch{display:inline-flex;align-items:center;justify-content:center;flex:0 0 48px;width:48px;min-width:48px;max-width:48px;height:48px;min-height:48px;max-height:48px;border:1px solid #7798b9;border-radius:10px;background:#17395c;color:#ffe38b;font-size:25px;line-height:1;padding:0;box-sizing:border-box}
 .admin-top .fg-emoji-launch:hover,.fg-emoji-near:hover{background:#254e74}
 .admin-top .fg-emoji-launch:focus-visible,.fg-emoji-near:focus-visible{outline:3px solid #ffd630;outline-offset:2px}
 .fg-emoji-near{display:inline-flex;align-items:center;justify-content:center;margin:8px 0 2px;padding:7px 11px;min-height:35px;width:auto;max-width:100%;font-size:.8rem;line-height:1.2;border:1px solid #7299bd;border-radius:8px;background:#183c5d;color:#ffebad;font-weight:700;text-transform:none;letter-spacing:0;box-shadow:none}
@@ -20,4 +20,4 @@
 #fgEmojiPicker .fg-emoji-item:hover,#fgEmojiPicker .fg-emoji-item:focus-visible{border-color:#ffd630;background:#2b5374;outline:0}
 #fgEmojiPicker .fg-emoji-feedback{margin:7px 0 0;min-height:1.2em;color:#ffdc75;font-size:.8rem}
 #fgEmojiPicker .fg-emoji-empty{grid-column:1/-1;color:#c7d5e2;padding:12px}
-@media(max-width:470px){#fgEmojiPicker{inset:auto 12px max(12px,env(safe-area-inset-bottom,0px)) 12px;width:auto;max-height:min(60dvh,450px)}#fgEmojiPicker .fg-emoji-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.admin-top .fg-emoji-launch{width:42px;height:42px;flex-basis:42px}}
+@media(max-width:470px){#fgEmojiPicker{inset:auto 12px max(12px,env(safe-area-inset-bottom,0px)) 12px;width:auto;max-height:min(60dvh,450px)}#fgEmojiPicker .fg-emoji-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.admin-top .fg-emoji-launch{width:44px;min-width:44px;max-width:44px;height:44px;min-height:44px;max-height:44px;flex-basis:44px}}
