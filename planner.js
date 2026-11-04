@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const defs=[{name:'Games',cols:[0],labels:['Game or relay']},{name:'Drinks & supplies',cols:[1],labels:['Item']},{name:'Appetizers',cols:[2],labels:['Item']},{name:'Main course',cols:[3],labels:['Item']},{name:'Schedule',cols:[4,5],labels:['Activity','Time']},{name:'Groceries',cols:[6,7],labels:['Item','Price']},{name:'Notes',cols:[8],labels:['Note']}],guestLabels=['Guest name','Size Shirt (original column)','Amount','RSVP','Paid','Paid via','Shirt size'];
+const defs=[{name:'Games',cols:[0],labels:['Game or relay']},{name:'Drinks & supplies',cols:[1],labels:['Item']},{name:'Appetizers',cols:[2],labels:['Item']},{name:'Main course',cols:[3],labels:['Item']},{name:'Schedule',cols:[4,5],labels:['Activity','Time']},{name:'Groceries',cols:[6,7],labels:['Item','Price']},{name:'Notes',cols:[8],labels:['Note']}],guestLabels={0:'Guest name',2:'Amount',3:'RSVP',4:'Paid',5:'Paid via',6:'Shirt size'};
 let data,rev,dirty=false,view='guests',guestSubView='all',filter='all',saving=false,blocked=false,version=0,autoTimer=null;
 const $=s=>document.querySelector(s),status=$('#status');
 function changed(){
@@ -93,11 +93,46 @@ function rsvpStatus(row){
 }
 function pay(row){const p=(row[4]||'').trim().toLowerCase(),amount=(row[2]||'').trim().toLowerCase();if(p==='yes'||p==='paid')return 'paid';if(p==='no'||p==='unpaid')return 'unpaid';if(amount==='waived'||p==='waived')return 'waived';return 'unknown'}
 function updatePaidTotal(){const el=$('#paidTotal');if(!el||!data)return;let cents=0,missing=0;for(const {row} of guestEntries().entries){if(!row[0].trim()||pay(row)!=='paid')continue;const raw=(row[2]||'').trim().replace(/^[$]/, '').replace(/,/g,'');if(!/^[0-9]+(?:[.][0-9]{1,2})?$/.test(raw)){missing++;continue}const [whole,dec='']=raw.split('.');const n=Number(whole)*100+Number(dec.padEnd(2,'0'));if(!Number.isSafeInteger(n)||!Number.isSafeInteger(cents+n)){missing++;continue}cents+=n}el.textContent='Total marked paid: '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100)+(missing?' · '+missing+' paid '+(missing===1?'guest has':'guests have')+' no valid amount':'')} 
-function editGuest(index){const isNew=index===null, draft=isNew?Array(7).fill(''):data.guests[index].slice();const dialog=document.createElement('dialog');dialog.style.cssText='width:min(90vw,600px);max-height:85vh;overflow:auto;background:#10233c;color:white;border:1px solid #6683a4;border-radius:12px;padding:22px';const title=document.createElement('h2');title.textContent=isNew?'Add squad member':'Edit squad member';dialog.append(title);const grid=document.createElement('div');grid.className='grid';draft.forEach((v,i)=>{const label=document.createElement('label');label.textContent=guestLabels[i];const input=document.createElement('input');input.type='text';input.maxLength=500;input.value=v;input.addEventListener('input',()=>{draft[i]=input.value});label.append(input);grid.append(label)});dialog.append(grid);const error=document.createElement('p');error.setAttribute('role','status');dialog.append(error);const actions=document.createElement('div');actions.className='guest-actions';actions.append(button('Save details',()=>{if((isNew||data.guests[index][0].trim())&&!draft[0].trim()){error.textContent='Enter a guest name.';return}const newKey=guestKey(draft[0]),oldKey=isNew?'':guestKey(data.guests[index][0]);
- if(newKey&&(isNew||newKey!==oldKey)&&data.guests.some((row,i)=>i!==index&&guestKey(row[0])===newKey)){
-  error.textContent='That guest is already in the Guest List. Edit the existing entry instead of creating a duplicate.';return
+function editGuest(index){
+ const isNew=index===null,draft=isNew?Array(7).fill(''):data.guests[index].slice();
+ while(draft.length<7)draft.push('');
+ const dialog=document.createElement('dialog');dialog.className='guest-edit-dialog';
+ const title=document.createElement('h2');title.textContent=isNew?'Add guest':'Edit guest';dialog.append(title);
+ const grid=document.createElement('div');grid.className='grid';
+ const presets={3:['','Yes','No','Maybe'],4:['','Yes','No','Waived'],5:['','Zelle','CashApp','Venmo','Cash','Apple Pay','PayPal','Other'],6:['','N/A','XS','S','M','L','XL','XXL','2XL','3X','3XL','4XL']};
+ for(const i of [0,2,3,4,5,6]){
+  const label=document.createElement('label');label.textContent=guestLabels[i];let control;
+  if(presets[i]){
+   control=document.createElement('select');
+   const values=[...presets[i]],current=String(draft[i]||'').trim();
+   if(current&&!values.some(v=>v.toLowerCase()===current.toLowerCase()))values.push(current);
+   for(const value of values){const option=document.createElement('option');option.value=value;option.textContent=value||'Not provided';control.append(option)}
+   control.value=values.find(v=>v.toLowerCase()===current.toLowerCase())||'';
+   control.addEventListener('change',()=>{draft[i]=control.value});
+  }else{
+   control=document.createElement('input');control.type='text';control.maxLength=i===0?100:30;
+   control.value=draft[i]||'';control.addEventListener('input',()=>{draft[i]=control.value});
+  }
+  label.append(control);grid.append(label);
  }
- if(isNew)data.guests.push(draft);else data.guests[index]=draft;filter='all';changed();dialog.close();dialog.remove();renderTabs();renderGuests()},'primary'),button('Cancel',()=>{dialog.close();dialog.remove()}));dialog.append(actions);dialog.addEventListener('cancel',()=>dialog.remove());document.body.append(dialog);dialog.showModal();grid.querySelector('input').focus()}
+ dialog.append(grid);
+ const error=document.createElement('p');error.setAttribute('role','status');dialog.append(error);
+ const actions=document.createElement('div');actions.className='guest-actions';
+ actions.append(button('Save details',()=>{
+  if(!draft[0].trim()){error.textContent='Enter a guest name.';return}
+  const newKey=guestKey(draft[0]),oldKey=isNew?'':guestKey(data.guests[index][0]);
+  if(newKey&&(isNew||newKey!==oldKey)&&data.guests.some((row,i)=>i!==index&&guestKey(row[0])===newKey)){
+   error.textContent='That guest is already in the Guest List. Edit the existing entry instead of creating a duplicate.';return;
+  }
+  if(isNew)data.guests.push(draft);else data.guests[index]=draft;
+  filter='all';changed();dialog.close();dialog.remove();renderTabs();renderGuests();
+ },'primary'),button('Cancel',()=>{dialog.close();dialog.remove()}));
+ if(!isNew&&data.guests[index][0]?.trim())actions.append(button('Remove entry',()=>{
+  dialog.close();dialog.remove();removeGuestEntry(index);
+ },'danger'));
+ dialog.append(actions);dialog.addEventListener('cancel',()=>dialog.remove());
+ document.body.append(dialog);dialog.showModal();grid.querySelector('input,select')?.focus();
+}
 function removeGuestEntry(index){
  const row=data.guests[index];if(!row||!row[0]?.trim())return;
  const name=String(row[0]).trim(),key=syncGuestKey(name);
@@ -160,51 +195,56 @@ function renderGuests(){
   b.setAttribute('aria-pressed',String(filter===key));fs.append(b);
  });
  let shown=0;
+ const table=document.createElement('table');table.className='guest-list-table';
+ const thead=document.createElement('thead'),head=document.createElement('tr');
+ for(const label of ['Guest name','Amount','RSVP','Paid','Paid via','Shirt size']){
+  const th=document.createElement('th');th.scope='col';th.textContent=label;head.append(th);
+ }
+ thead.append(head);table.append(thead);
+ const body=document.createElement('tbody');
+ const choices={3:['','Yes','No','Maybe'],4:['','Yes','No','Waived'],5:['','Zelle','CashApp','Venmo','Cash','Apple Pay','PayPal','Other'],6:['','N/A','XS','S','M','L','XL','XXL','2XL','3X','3XL','4XL']};
+ function guestSelect(row,column){
+  const select=document.createElement('select');select.className='guest-cell-select';
+  select.setAttribute('aria-label',guestLabels[column]+' for '+row[0]);
+  const current=String(row[column]||'').trim(),values=[...choices[column]];
+  if(current&&!values.some(v=>v.toLowerCase()===current.toLowerCase()))values.push(current);
+  for(const value of values){const option=document.createElement('option');option.value=value;option.textContent=value||'—';select.append(option)}
+  select.value=values.find(v=>v.toLowerCase()===current.toLowerCase())||'';
+  select.addEventListener('change',()=>{row[column]=select.value;changed();renderGuests()});
+  return select;
+ }
  entries.forEach(({row,index:i})=>{
   const isTotal=!row[0].trim()&&row.some(Boolean),payment=pay(row);
-  if(notRsvp&&(!row[0].trim()||rsvpConfirmed(row)))return;
-  if(!notRsvp&&!isTotal&&filter!=='all'&&filter!==payment)return;
-  const card=document.createElement('article');card.className='guest';card.dataset.guestIndex=String(i);
-  const heading=document.createElement('h3');heading.textContent=row[0]||'Sheet total / unnamed entry';
-  const badge=document.createElement('span');
-  badge.className='badge '+(notRsvp?'rsvp-pending':payment);
-  badge.textContent=notRsvp?rsvpStatus(row):isTotal?'Sheet entry':({paid:'Paid',unpaid:'Unpaid',unknown:'Unknown',waived:'Waived'}[payment]);
-  heading.append(' ',badge);card.append(heading);
-  const grid=document.createElement('div');grid.className='grid';
-  const fields=isTotal?[[2,'Original sheet total']]:notRsvp
-   ?[[3,'RSVP'],[4,'Paid'],[2,'Amount'],[5,'Paid via']]
-   :[[2,'Amount'],[3,'RSVP'],[5,'Paid via'],[6,'Shirt size']];
-  fields.forEach(([j,label])=>{
-   const item=document.createElement('div');item.style.cssText='padding:8px 0;color:#dce8f5';
-   const caption=document.createElement('small');caption.textContent=label+': ';
-   const value=document.createElement('strong');value.textContent=row[j]||'Not provided';
-   item.append(caption,value);grid.append(item);
-  });card.append(grid);
-  const acts=document.createElement('div');acts.className='guest-actions';
-  if(isTotal)acts.append(button('Edit total',()=>editGuest(i)));
-  else if(notRsvp){
-   acts.append(button('Confirm RSVP',()=>{
-    row[3]='Yes';changed();renderTabs();renderGuests();
-   },'primary'),button('Edit details',()=>editGuest(i)));
-  }else{
-   acts.append(
-    button('Edit details',()=>editGuest(i)),
-    button('Mark paid',()=>{row[4]='Yes';changed();renderGuests()},'primary'),
-    button('Mark unpaid',()=>{row[4]='No';changed();renderGuests()}),
-    button('Clear payment status',()=>{row[4]='';changed();renderGuests()})
-   );
+  if(isTotal){
+   const line=document.createElement('div');line.className='muted';line.textContent='Original sheet total: '+(row[2]||'Not provided');
+   totals.append(line);return;
   }
-  if(!isTotal)acts.append(button('Remove entry',()=>removeGuestEntry(i),'danger'));
-  card.append(acts);
-  (isTotal?totals:root).append(card);
-  if(!isTotal)shown++;
+  if(!row[0].trim()||notRsvp&&rsvpConfirmed(row)||!notRsvp&&filter!=='all'&&filter!==payment)return;
+  const tr=document.createElement('tr');tr.className=rsvpConfirmed(row)&&payment==='paid'?'guest-ready':'guest-waiting';
+  tr.dataset.guestIndex=String(i);
+  const nameCell=document.createElement('td'),nameButton=button(row[0],()=>editGuest(i),'guest-name-button');
+  nameButton.title='Edit '+row[0];nameCell.append(nameButton);tr.append(nameCell);
+  const amountCell=document.createElement('td'),amountInput=document.createElement('input');
+  amountInput.className='guest-cell-amount';amountInput.type='text';amountInput.inputMode='decimal';
+  amountInput.maxLength=30;amountInput.setAttribute('aria-label','Amount for '+row[0]);
+  const rawAmount=String(row[2]||'').trim();amountInput.value=/^\\d+(?:\\.\\d{1,2})?$/.test(rawAmount)?'$'+rawAmount:rawAmount;
+  amountInput.placeholder='$0';
+  amountInput.addEventListener('change',()=>{row[2]=amountInput.value.trim().replace(/^\\$/,'');changed();renderGuests()});
+  amountCell.append(amountInput);tr.append(amountCell);
+  for(const column of [3,4,5,6]){const cell=document.createElement('td');cell.append(guestSelect(row,column));tr.append(cell)}
+  body.append(tr);shown++;
  });
- $('#sheetTotal').hidden=notRsvp||!totals.children.length;
- if(!shown){
+ table.append(body);
+ if(shown){
+  const wrap=document.createElement('div');wrap.className='guest-table-wrap';wrap.setAttribute('role','region');
+  wrap.setAttribute('aria-label','Guest list — edit guest names or adjust cells');wrap.tabIndex=0;
+  wrap.append(table);root.append(wrap);
+ }else{
   const p=document.createElement('p');p.className='muted';
   p.textContent=notRsvp?'Everyone on the Guest List has a confirmed RSVP.':'No guests in this view.';
   root.append(p);
  }
+ $('#sheetTotal').hidden=notRsvp||!totals.children.length;
 }
 function plannerSearch(query,matches){
  if(!data||!Array.isArray(data.guests)||!Array.isArray(data.planning))return [];
