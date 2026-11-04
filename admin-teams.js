@@ -239,7 +239,7 @@ function openEditor(index){
  for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
  }
- const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes players with both RSVP = Yes and Paid = Yes on the Guest List.':'Choose a Guest List player with both Paid = Yes and RSVP = Yes. Names marked * and non-playing roles are not selectable. Use Randomize Teams to reshuffle.');area.append(caption);
+ const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes players with both RSVP = Yes and Paid = Yes on the Guest List.':'Choose a Guest List player with both Paid = Yes and RSVP = Yes. An asterisk in the source Guest List does not prevent selection; non-playing roles remain excluded. Use Randomize Teams to reshuffle.');area.append(caption);
  if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
  memberSelect.setAttribute('aria-label','Guest List players with RSVP Yes and Paid Yes');
@@ -274,7 +274,7 @@ function openEditor(index){
  }
  function addMember(member){
   if(!member){error.textContent='Choose a Guest List player confirmed as paid and RSVP Yes.';return}
-  if(!availableGuests().includes(member)){error.textContent='This guest is already assigned, marked *, not Playing, or no longer Paid and RSVP-confirmed.';return}
+  if(!availableGuests().includes(member)){error.textContent='This guest is already assigned, not Playing, or no longer Paid and RSVP-confirmed.';return}
   // Members, including named plus-ones, may be assigned to separate teams.
   // Do not silently move the person's inviter or any other companion.
   if(canonical(member)!==canonical(draft.captain)&&!draft.members.some(m=>nameKey(m)===nameKey(member)))draft.members.push(member);
@@ -365,7 +365,7 @@ async function start(){
   roleCaptains=new Set(Array.isArray(result.roleCaptains)?result.roleCaptains:[]);
   roleRevision=Number.isSafeInteger(result.roleRevision)?result.roleRevision:null;
   renderRoles();
-  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' confirmed Guest List players (RSVP = Yes and Paid = Yes, excluding non-playing roles) · '+(result.markedExcluded||0)+' starred Guest List entries excluded · '+(result.paymentPending||0)+' RSVP-confirmed entries waiting for payment · '+(result.rsvpPending||0)+' paid entries waiting for RSVP. No Form submission required.';
+  const info=$('teamEligibilityInfo');if(info)info.textContent=guests.length+' confirmed Guest List players (RSVP = Yes and Paid = Yes, excluding non-playing roles) · '+(result.markedIncluded||0)+' starred Guest List entries included · '+(result.paymentPending||0)+' RSVP-confirmed entries waiting for payment · '+(result.rsvpPending||0)+' paid entries waiting for RSVP. No Form submission required.';
   updateSourceStatus(result);
   if(result.syncWarning)status.textContent='⚠ '+result.syncWarning;
   publishedBaseline=serial(result.publishedTeams);dirty=false;blocked=false;
