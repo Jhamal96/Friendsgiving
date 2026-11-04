@@ -290,12 +290,11 @@ export function formEligible(organizer,form){
 // their source of truth. The Form is consulted ONLY to label a named plus-one
 // in the admin interface; submitting a Form does not grant team eligibility.
 //
-// An active Guest List entry must (a) have its own name, (b) not be marked
-// with *, (c) not be a generic "+1" payment placeholder, and (d) have both
-// RSVP=Yes and Paid=Yes. Unconfirmed or unpaid people enter automatically on
-// a future sync after both fields become Yes. Star-marked captains are
-// deliberately excluded from this playing pool but retain their existing
-// reserved captain position, handled separately by balanceTeams.
+// An active Guest List entry needs its own name, must not be a generic +1
+// payment placeholder, and needs both RSVP=Yes and Paid=Yes. Asterisks in
+// spreadsheet names carry separate meaning and must NOT affect eligibility.
+// Team display names omit the marker; the source spreadsheet remains untouched.
+// Captains remain reserved on their own teams by balanceTeams.
 export function guestListEligible(organizer,form={}){
  const baseline=organizer?.sheetSync?.status==='sheet_to_site_active'
   ?organizer.sheetSync.baseline:null;
@@ -304,14 +303,14 @@ export function guestListEligible(organizer,form={}){
  const removed=organizer?.removedGuests&&typeof organizer.removedGuests==='object'
   ?organizer.removedGuests:{};
  const rows=[],sourceNames=new Set();
- let markedExcluded=0,placeholderExcluded=0,duplicateRows=0;
+ let markedIncluded=0,placeholderExcluded=0,duplicateRows=0;
  for(const row of Array.isArray(organizer?.guests)?organizer.guests:[]){
   if(!Array.isArray(row))continue;
   const raw=String(row[0]||'').trim(),sourceKey=raw.toLocaleLowerCase('en-US');
   if(!sourceKey||activeSource&&!activeSource.has(sourceKey)||Object.hasOwn(removed,sourceKey))continue;
   if(sourceNames.has(sourceKey)){duplicateRows++;continue}
   sourceNames.add(sourceKey);
-  if(raw.includes('*')){markedExcluded++;continue}
+  if(raw.includes('*'))markedIncluded++;
   if(/\+\s*1\s*$/i.test(raw)){placeholderExcluded++;continue}
   const first=firstName(raw),key=firstKey(raw);
   if(!first||!key)continue;
@@ -366,7 +365,7 @@ export function guestListEligible(organizer,form={}){
  return {
   eligible,groups,aliases,matched,
   source:'guest-list',sourceCount:sourceNames.size,
-  markedExcluded,placeholderExcluded,duplicateRows,ambiguousCount,
+  markedExcluded:0,markedIncluded,placeholderExcluded,duplicateRows,ambiguousCount,
   rsvpPending,paymentPending,bothPending,
   reviewCount:rsvpPending+paymentPending+bothPending+ambiguousCount,
   companionReviewCount:companionNeedsReview
