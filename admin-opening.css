@@ -60,3 +60,55 @@ body>main .controls,body>main .toolbar,body>main .bar{min-width:0}
  #fgLoader,#fgLoader.is-done,body.fg-admin-reveal>main{transition:none;animation:none}
  #fgLoader.is-done::after,#fgLoader .intro-fallback .halo-ring{animation:none}
 }
+
+/* Uniform Mission Control header controls. The menu previously grew taller
+   than the Home, Emoji, and Settings buttons at high iOS text scaling. */
+.admin-top .admin-nav-left{display:flex;align-items:center;gap:8px;min-width:0}
+.admin-top .admin-home,
+.admin-top .fg-emoji-launch,
+.admin-top .settings-button,
+.admin-top .menu-wrap>summary{
+ box-sizing:border-box;
+ height:48px;
+ min-height:48px;
+ max-height:48px;
+ margin:0;
+ border-radius:10px;
+ vertical-align:middle;
+}
+.admin-top .admin-home,
+.admin-top .fg-emoji-launch,
+.admin-top .settings-button{
+ flex:0 0 48px;
+ width:48px;
+ min-width:48px;
+ max-width:48px;
+ padding:0;
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ line-height:1;
+}
+.admin-top .admin-home svg{width:24px;height:24px;flex-shrink:0;display:block}
+.admin-top .fg-emoji-launch{font:normal 25px/1 system-ui,sans-serif}
+.admin-top .settings-button{font:normal 25px/1 system-ui,sans-serif}
+.admin-top .settings-button>span{display:inline-block;line-height:1}
+.admin-top .menu-wrap{flex:0 0 auto;margin:0;align-self:center}
+.admin-top .menu-wrap>summary{
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ gap:9px;
+ padding:0 15px;
+ min-width:104px;
+ white-space:nowrap;
+ font:800 15px/1.1 system-ui,sans-serif;
+}
+.admin-top .menu-wrap>summary .menu-icon{font:normal 24px/1 system-ui,sans-serif}
+@media(max-width:440px){
+ .admin-top .admin-nav-left{gap:6px}
+ .admin-top .admin-home,.admin-top .fg-emoji-launch,
+ .admin-top .settings-button{width:44px;min-width:44px;max-width:44px;flex-basis:44px;height:44px;min-height:44px;max-height:44px}
+ .admin-top .menu-wrap>summary{height:44px;min-height:44px;max-height:44px;min-width:88px;padding:0 10px;font-size:14px;gap:6px}
+ .admin-top .menu-wrap>summary .menu-icon{font-size:21px}
+}
