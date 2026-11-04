@@ -48,6 +48,34 @@ async function saveDraft(){
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function btn(label,action,cls){const b=el('button',cls,label);b.type='button';b.addEventListener('click',action);return b}
 function input(label,value,limit,change){const l=el('label','edit-label',label),i=el('input');i.type='text';i.maxLength=limit;i.value=value||'';i.addEventListener('input',()=>change(i.value));l.append(i);return {label:l,input:i}}
+async function compactCaptainPhoto(file){
+ // Convert original camera photos to a small, metadata-free JPG avatar.
+ if(!file||file.size>10000000)throw Error('Choose an image smaller than 10 MB.');
+ if(file.type&&!file.type.startsWith('image/'))throw Error('Choose an image file.');
+ const url=URL.createObjectURL(file),image=new Image();
+ try{
+  await new Promise((resolve,reject)=>{
+   image.onload=resolve;
+   image.onerror=()=>reject(Error('Could not open this picture. Try a JPG or PNG.'));
+   image.src=url;
+  });
+ }finally{URL.revokeObjectURL(url)}
+ const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+ if(!ctx||!image.naturalWidth||!image.naturalHeight)throw Error('Unable to process image.');
+ const crop=Math.min(image.naturalWidth,image.naturalHeight);
+ const x=(image.naturalWidth-crop)/2,y=(image.naturalHeight-crop)/2;
+ for(const side of [320,280,240,200,160]){
+  canvas.width=side;canvas.height=side;
+  ctx.fillStyle='#0a203a';ctx.fillRect(0,0,side,side);
+  ctx.drawImage(image,x,y,crop,crop,0,0,side,side);
+  for(const quality of [.78,.66,.54,.43,.32]){
+   const photo=canvas.toDataURL('image/jpeg',quality);
+   if(photo.startsWith('data:image/jpeg;base64,')&&photo.length<=32000)return photo;
+  }
+ }
+ throw Error('Photo is too detailed to compress. Try a different picture.');
+}
+
 function cleanName(name){return String(name||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').replace(/\s+/g,' ').trim()}
 function nameKey(name){const s=String(name||'').trim(),plus=/\+\s*1\s*$/.test(s);return cleanName(plus?s.replace(/\+\s*1\s*$/,''):s).toLowerCase()+(plus?' +1':'')}
 function canonical(name){const k=nameKey(name);const group=guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k);return group?nameKey(group.primary):k}
@@ -207,7 +235,14 @@ function render(){
   if(team.caption)card.append(el('p','team-caption',team.caption));
   const details=memberKeys.size+' '+(memberKeys.size===1?'member':'members')+(captainKey?' + 1 captain':' · captain not assigned');
   card.append(el('p','team-count-details',details));
-  card.append(el('p','muted','Captain: '+(team.captain||'To be announced')));
+  const captainInfo=el('div','admin-captain-summary');
+  if(/^data:image\/(?:jpeg|webp);base64,/.test(team.captainPhoto||'')){
+   const photo=el('img','admin-captain-thumb');photo.src=team.captainPhoto;
+   photo.alt='Portrait of captain '+(team.captain||'');photo.width=64;photo.height=64;photo.loading='lazy';
+   captainInfo.append(photo);
+  }else captainInfo.append(el('span','admin-captain-placeholder',(team.captain||'?').trim().charAt(0).toUpperCase()));
+  captainInfo.append(el('span','admin-captain-name','Captain: '+(team.captain||'To be announced')));
+  card.append(captainInfo);
   const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'No additional players yet'));card.append(roster);
   // Make it obvious that +1 companions were assigned individually, not as
   // hidden additions tied to their inviter's team.
@@ -236,9 +271,51 @@ function openEditor(index){
  const draft=creating?{id:'team-'+crypto.randomUUID(),name:'',caption:'',captain:'',members:[]}:structuredClone(teams[index]);
  const modal=$('editTeam');$('editTeamTitle').textContent=creating?'Add a team':'Edit team';
  const area=$('teamFields');area.replaceChildren();
+ draft.captainPhoto=typeof draft.captainPhoto==='string'?draft.captainPhoto:'';
+ let photoOwner=nameKey(draft.captain),updatePhotoPreview=()=>{};
  for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
-  const field=input(label,draft[key],max,v=>draft[key]=v);area.append(field.label);
+  const field=input(label,draft[key],max,v=>{draft[key]=v;if(key==='captain')updatePhotoPreview()});area.append(field.label);
  }
+ const photoBox=el('div','captain-photo-editor');
+ photoBox.append(el('strong','captain-photo-label','★ Captain gamer card photo'));
+ const photoPreview=el('div','captain-photo-preview');
+ const photoStatus=el('p','muted captain-photo-status','Upload a picture of the captain. Photos are cropped and optimized before cloud saving.');
+ photoStatus.setAttribute('role','status');
+ const photoInput=el('input','captain-photo-file');photoInput.type='file';photoInput.accept='image/*,.heic,.heif';
+ photoInput.setAttribute('aria-label','Upload photo of the team captain');
+ const removePhoto=btn('Remove photo',()=>{
+  draft.captainPhoto='';photoOwner=nameKey(draft.captain);
+  photoStatus.textContent='Captain photo removed from this draft. Save the team to keep the change.';
+  updatePhotoPreview();
+ },'captain-photo-remove');
+ updatePhotoPreview=()=>{
+  photoPreview.replaceChildren();
+  const matchesOwner=photoOwner===nameKey(draft.captain),photo=matchesOwner?draft.captainPhoto:'';
+  if(/^data:image\/(?:jpeg|webp);base64,/.test(photo)){
+   const img=el('img','captain-photo-image');img.src=photo;
+   img.alt='Preview of '+(draft.captain||'captain')+' photo';photoPreview.append(img);
+  }else photoPreview.append(el('span','captain-photo-initial',(cleanName(draft.captain)||'?').charAt(0).toUpperCase()));
+  removePhoto.disabled=!draft.captainPhoto;
+  if(!matchesOwner&&draft.captainPhoto)photoStatus.textContent='Captain changed. Upload a new photo; the previous one will be cleared on save.';
+ };
+ const photoActions=el('div','captain-photo-actions');
+ const pickerLabel=el('label','captain-photo-pick','Choose captain photo');pickerLabel.append(photoInput);
+ photoActions.append(pickerLabel,removePhoto);
+ photoBox.append(photoPreview,photoActions,photoStatus);
+ area.append(photoBox);
+ photoInput.addEventListener('change',async()=>{
+  const file=photoInput.files?.[0];if(!file)return;
+  if(!cleanName(draft.captain)){photoStatus.textContent='Enter the captain name before uploading their picture.';photoInput.value='';return}
+  const done=$('confirmTeam');done.disabled=true;photoInput.disabled=true;
+  photoStatus.textContent='Preparing the captain photo…';
+  try{
+   draft.captainPhoto=await compactCaptainPhoto(file);photoOwner=nameKey(draft.captain);
+   updatePhotoPreview();
+   photoStatus.textContent='✓ Photo ready. Save the team, then publish for guests to see it.';
+  }catch(err){photoStatus.textContent='⚠ '+(err.message||'Could not read photo.')}
+  finally{done.disabled=false;photoInput.disabled=false;photoInput.value=''}
+ });
+ updatePhotoPreview();
  const caption=el('p','muted',creating?'Create and save this team first. Randomize Teams includes players with both RSVP = Yes and Paid = Yes on the Guest List.':'Choose a Guest List player with both Paid = Yes and RSVP = Yes. An asterisk in the source Guest List does not prevent selection; non-playing roles remain excluded. Use Randomize Teams to reshuffle.');area.append(caption);
  if(creating){const note=el('p','muted','No members are assigned during team creation.');area.append(note)}
  const entry=el('div','member-entry'),memberSelect=el('select');
@@ -295,6 +372,7 @@ function openEditor(index){
  submit.onclick=()=>{
  if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
  draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=cleanName(draft.captain);draft.members=uniqueMembers(draft.members);
+ if(nameKey(draft.captain)!==photoOwner)draft.captainPhoto='';
  const key=canonical(draft.captain);
  if(key){
   const conflict=teams.some((t,i)=>i!==index&&(canonical(t.captain)===key||t.members.some(m=>canonical(m)===key)));
