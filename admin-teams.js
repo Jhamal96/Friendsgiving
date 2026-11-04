@@ -79,7 +79,7 @@ async function compactCaptainPhoto(file){
 function cleanName(name){return String(name||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,' ').replace(/\s+/g,' ').trim()}
 function nameKey(name){const s=String(name||'').trim(),plus=/\+\s*1\s*$/.test(s);return cleanName(plus?s.replace(/\+\s*1\s*$/,''):s).toLowerCase()+(plus?' +1':'')}
 function canonical(name){const k=nameKey(name);const group=guestGroups.find(g=>nameKey(g.primary)===k||nameKey(g.alias)===k);return group?nameKey(group.primary):k}
-function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=nameKey(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
+function uniqueMembers(xs){const seen=new Set();return xs.map(x=>x.trim()).filter(x=>{const k=canonical(x);if(!k||seen.has(k))return false;seen.add(k);return true})}
 function roleNameKey(name){return nameKey(name).split(' ')[0]}
 function roleLabel(record){
  const role=record?.role||'player';
@@ -105,7 +105,7 @@ function renderRoles(){
   const item=el('div','role-person'+(captain?' is-captain':current?' is-staff':''));item.dataset.roleKey=key;
   const identity=el('div','role-person-info');
   identity.append(el('div','role-person-name',person.name));
-  identity.append(el('small','role-person-meta',captain?'Team captain · must remain playing':(person.kind==='Plus-one'?'Paid named plus-one':'Registered guest')+' · '+roleLabel(current)));
+  identity.append(el('small','role-person-meta',captain?'Team captain · must remain playing':'Registered guest · '+roleLabel(current)));
   const controls=el('div','role-person-controls');
   const select=el('select','role-person-select');
   select.setAttribute('aria-label','Choose playing or staff role for '+person.name);
@@ -172,24 +172,18 @@ function captainNames(){
  return {names:new Set(names.keys())};
 }
 function randomIndex(length){const top=4294967296,limit=Math.floor(top/length)*length;let n;do{const x=new Uint32Array(1);crypto.getRandomValues(x);n=x[0]}while(n>=limit);return n%length}
-function paidPlusOneKeys(){
- return new Set(plusOnePlayers.filter(p=>p.playing).map(p=>canonical(p.name)));
-}
-function updatePlusOneDisplay(pending=0){
+function updatePlusOneDisplay(){
  const info=$('plusOneEligibilityInfo');if(!info)return;
- const active=paidPlusOneKeys();
- const playing=guests.filter(name=>active.has(canonical(name))).length;
- info.textContent='🎟️ '+playing+' paid +1 '+(playing===1?'player':'players')+
-  ' included individually in the next shuffle'+(pending?' · '+pending+' companion '+(pending===1?'entry needs':'entries need')+' payment or name review':'')+
-  '. Plus-ones may be on a different team from their inviter.';
+ const count=new Set(guests.map(canonical).filter(Boolean)).size;
+ info.textContent='✓ '+count+' eligible players ready · Every guest can only be on one team.';
 }
 function randomizeTeams(){
  if(rolesBusy){status.textContent='Finish saving player roles before randomizing.';return}
  if(teams.length<2){status.textContent='Create at least two teams before randomizing.';return}
  const captains=captainNames();
  if(captains.error){status.textContent='⚠ '+captains.error;return}
- if(!guests.length){status.textContent='No eligible paid players or plus-ones are available.';return}
- if(teams.some(t=>t.members.length)&&!confirm('Randomize all eligible players, including each paid and RSVP-confirmed plus-one independently? Captains stay with their teams. This replaces the private draft assignments, but does not publish them automatically.'))return;
+ if(!guests.length){status.textContent='No eligible players are available.';return}
+ if(teams.some(t=>t.members.length)&&!confirm('Randomize all eligible Guest List players? Everyone is assigned once, captains stay in place, and only the private draft changes until you publish.'))return;
  // One random slot per verified participant. A paid +1 is a named player,
  // and can land on a different team from the person who registered them.
  const eligible=new Map();
@@ -199,7 +193,6 @@ function randomizeTeams(){
   eligible.set(key,name);
  }
  const shuffled=[...eligible.values()];
- const includedPlusOnes=shuffled.filter(name=>paidPlusOneKeys().has(canonical(name))).length;
  // Fisher-Yates: uniform shuffle using cryptographically secure indices.
  for(let i=shuffled.length-1;i>0;i--){
   const j=randomIndex(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
@@ -214,7 +207,7 @@ function randomizeTeams(){
  }
  teams.forEach((team,i)=>{team.members=next[i]});
  markDirty();render();
- status.textContent='✓ Randomized '+shuffled.length+' eligible players, including '+includedPlusOnes+' paid +1 '+(includedPlusOnes===1?'player':'players')+' as independent entries. Captains are unchanged. Draft autosaving; publish when ready.';
+ status.textContent='✓ Randomized '+shuffled.length+' unique eligible players with no duplicate assignments. Captains stay in place. Draft autosaving; publish when ready.';
 }
 function render(){
  cards.replaceChildren();
@@ -222,8 +215,8 @@ function render(){
  teams.forEach((team,index)=>{
   const card=el('article','team-card');card.dataset.teamIndex=String(index);
   // Count unique assigned players in this box; the captain counts once.
-  const captainKey=nameKey(team.captain);
-  const memberKeys=new Set((team.members||[]).map(nameKey).filter(key=>key&&key!==captainKey));
+  const captainKey=canonical(team.captain);
+  const memberKeys=new Set((team.members||[]).map(canonical).filter(key=>key&&key!==captainKey));
   const playerCount=memberKeys.size+(captainKey?1:0);
   const heading=el('div','team-card-heading');
   heading.append(el('h2','',team.name||'New team'));
@@ -244,17 +237,6 @@ function render(){
   captainInfo.append(el('span','admin-captain-name','Captain: '+(team.captain||'To be announced')));
   card.append(captainInfo);
   const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'No additional players yet'));card.append(roster);
-  // Make it obvious that +1 companions were assigned individually, not as
-  // hidden additions tied to their inviter's team.
-  const plusKeys=paidPlusOneKeys();
-  const plusMembers=team.members.filter(member=>plusKeys.has(canonical(member)));
-  if(plusMembers.length){
-   const plusWrap=el('div','team-plus-one-players');
-   plusWrap.append(el('strong','team-plus-one-label','🎟️ Paid +1 players ('+plusMembers.length+')'));
-   const people=el('div','team-plus-one-list');
-   for(const member of plusMembers)people.append(el('span','team-plus-one-chip',member));
-   plusWrap.append(people);card.append(plusWrap);
-  }
   const actions=el('div','team-actions');
   actions.append(btn('Edit team',()=>openEditor(index),'primary'));
   const up=btn('↑',()=>move(index,-1)),down=btn('↓',()=>move(index,1));up.title='Move team up';down.title='Move team down';up.disabled=index===0;down.disabled=index===teams.length-1;actions.append(up,down);
@@ -262,7 +244,9 @@ function render(){
   card.append(actions);cards.append(card);
  });
  $('randomizeTeams').disabled=rolesBusy||teams.length<2||!guests.length;
- $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+teams.reduce((sum,t)=>sum+new Set([t.captain,...t.members].map(nameKey).filter(Boolean)).size,0)+' assigned people (captains included)';
+ const allAssigned=teams.flatMap(t=>[t.captain,...t.members]).map(canonical).filter(Boolean);
+ const duplicates=allAssigned.length-new Set(allAssigned).size;
+ $('teamCount').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+new Set(allAssigned).size+' unique assigned people'+(duplicates?' · ⚠ '+duplicates+' duplicate assignments':' · ✓ No duplicates');
  window.FriendsgivingSearch?.refresh();
 }
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
@@ -322,29 +306,26 @@ function openEditor(index){
  memberSelect.setAttribute('aria-label','Guest List players with RSVP Yes and Paid Yes');
  const members=el('div','member-list'),error=el('p','error'),availableCount=el('p','muted');
  error.setAttribute('role','status');availableCount.setAttribute('aria-live','polite');
- const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>nameKey(m)===nameKey(name)));
+ const assignedElsewhere=name=>teams.some((t,j)=>j!==index&&t.members.some(m=>canonical(m)===canonical(name)));
  const reservedByCaptain=name=>teams.some((t,j)=>j!==index&&canonical(t.captain)&&canonical(t.captain)===canonical(name))||(canonical(draft.captain)&&canonical(draft.captain)===canonical(name));
- const availableGuests=()=>guests.filter(g=>!reservedByCaptain(g)&&!draft.members.some(m=>nameKey(m)===nameKey(g))&&!assignedElsewhere(g));
+ const availableGuests=()=>{const seen=new Set();return guests.filter(g=>{const key=canonical(g);if(!key||seen.has(key)||reservedByCaptain(g)||draft.members.some(m=>canonical(m)===key)||assignedElsewhere(g))return false;seen.add(key);return true})};
  function drawChoices(){
   const choices=availableGuests(),previous=memberSelect.value;
   memberSelect.replaceChildren();
   const placeholder=el('option','','Select a paid, RSVP-confirmed Guest List player…');placeholder.value='';memberSelect.append(placeholder);
-  const plusKeys=paidPlusOneKeys();
   choices.forEach(g=>{
-   const option=el('option','',plusKeys.has(canonical(g))?'🎟️ Paid +1 · '+g:g);
+   const option=el('option','',g);
    option.value=g;memberSelect.append(option);
   });
   memberSelect.value=choices.includes(previous)?previous:'';
   memberSelect.disabled=!choices.length;addButton.disabled=!choices.length;randomButton.disabled=!choices.length;
-  const plusAvailable=choices.filter(g=>plusKeys.has(canonical(g))).length;
-  availableCount.textContent=choices.length+' eligible '+(choices.length===1?'player':'players')+' available'+
-    (plusAvailable?' · '+plusAvailable+' paid +1 '+(plusAvailable===1?'player':'players'):'');
+  availableCount.textContent=choices.length+' eligible unassigned '+(choices.length===1?'player':'players')+' available';
  }
  function drawMembers(){
   members.replaceChildren();
   if(!draft.members.length)members.append(el('span','muted','No members assigned yet'));
   draft.members.forEach((g,i)=>{
-   const chip=el('span','member-chip',paidPlusOneKeys().has(canonical(g))?'🎟️ +1 '+g+' ':g+' ');
+   const chip=el('span','member-chip',g+' ');
    chip.append(btn('×',()=>{draft.members.splice(i,1);drawMembers();drawChoices()},'remove-member'));
    members.append(chip);
   });
@@ -354,7 +335,7 @@ function openEditor(index){
   if(!availableGuests().includes(member)){error.textContent='This guest is already assigned, not Playing, or no longer Paid and RSVP-confirmed.';return}
   // Members, including named plus-ones, may be assigned to separate teams.
   // Do not silently move the person's inviter or any other companion.
-  if(canonical(member)!==canonical(draft.captain)&&!draft.members.some(m=>nameKey(m)===nameKey(member)))draft.members.push(member);
+  if(canonical(member)!==canonical(draft.captain)&&!draft.members.some(m=>canonical(m)===canonical(member)))draft.members.push(member);
   error.textContent='';drawMembers();drawChoices();
  }
  const addButton=btn('+ Add member',()=>addMember(memberSelect.value));
