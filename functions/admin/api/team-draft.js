@@ -107,6 +107,21 @@ export async function onRequestPost({request,env}){
   // Captains stay locked on their own teams. Every paid named companion is
   // otherwise an independent player and may join a different team from
   // their inviter, including via the Random Pick and Randomize controls.
+  // Validate all assignments against the canonical Guest List identity,
+  // not only the typed spelling (nicknames, initials or star markers).
+  // A person may occur exactly once, as either captain or team member.
+  const assignments=new Map();
+  for(let i=0;i<teams.length;i++){
+   for(const [person,position] of [[teams[i].captain,'captain'],...teams[i].members.map(name=>[name,'player'])]){
+    const key=canonical(person);
+    if(!key)continue;
+    if(assignments.has(key)){
+     const prior=assignments.get(key);
+     return reply({error:'Duplicate player assignment: '+person+' is already on '+prior.team+'. Remove the extra entry before saving.'},400);
+    }
+    assignments.set(key,{team:teams[i].name,position});
+   }
+  }
   const captainOwners=new Map();
   for(let i=0;i<teams.length;i++){
    const k=canonical(teams[i].captain);
