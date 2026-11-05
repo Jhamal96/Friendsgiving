@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#080f1b">
+<title>Game Tally | Friendsgiving Mission Control</title>
+<style>
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071423ef,#091b30f9),url('/battlefield.png') center/cover fixed;color:#eff6ff;font:16px/1.5 system-ui,sans-serif}
+main{max-width:1150px;margin:auto;padding:20px clamp(14px,4vw,34px) 90px}
+a{color:#ffe06e}button{font:750 .93rem system-ui;cursor:pointer;padding:11px 15px;color:white;background:#17385c;border:1px solid #7296b7;border-radius:8px}
+button:hover:not(:disabled){filter:brightness(1.15)}button:disabled{opacity:.55;cursor:wait}a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #ffd630;outline-offset:3px}
+h1,h2,h3{font-family:Impact,'Arial Narrow',system-ui,sans-serif;text-transform:uppercase;letter-spacing:.035em;line-height:1.05}
+h1{font-size:clamp(2.6rem,8vw,4.8rem);margin:8px 0}h2{color:#ffe06c;font-size:clamp(1.55rem,4vw,2.1rem);margin:0}
+p{margin:9px 0}
+.eyebrow{color:#ffd630;font-size:.77rem;font-weight:850;letter-spacing:.17em}
+.muted{color:#bdd0e4}
+.admin-top{position:sticky;top:0;z-index:15;display:flex;gap:12px;justify-content:space-between;align-items:center;background:#08172aef;padding:10px 0;backdrop-filter:blur(12px)}
+.nav-left{display:flex;align-items:center;gap:9px}
+.home{display:inline-flex;align-items:center;justify-content:center;width:45px;height:45px;background:#132e4c;border:1px solid #6788aa;border-radius:8px;text-decoration:none;color:#ffdf64;font-size:1.5rem}
+.menu-wrap{position:relative}.menu-wrap>summary{list-style:none;cursor:pointer;padding:11px 14px;min-height:45px;background:#142f50;border:1px solid #769bbb;border-radius:8px;font-weight:800}
+.menu-wrap>summary::-webkit-details-marker{display:none}.menu-list{position:absolute;z-index:20;top:calc(100% + 8px);left:0;width:min(320px,90vw);background:#0c263f;border:1px solid #668eb2;border-radius:11px;padding:8px;box-shadow:0 18px 50px #000b}
+.menu-list a{display:block;padding:10px 13px;border-radius:5px;color:#fff;text-decoration:none;font-weight:650}.menu-list a:hover,.menu-list a[aria-current=page]{background:#23517d}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap}.primary{background:#ffd630;color:#0a2034;border-color:#ffd630}
+.intro{max-width:790px;color:#d1dfec}
+.status-line{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:21px 0 16px;padding:11px 14px;background:#0b2946e9;border:1px solid #4b759b;border-left:4px solid #ffd630;border-radius:9px;font-size:.87rem}
+.status-line p{margin:0;flex:1 1 270px}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr));gap:12px;margin:17px 0 26px}
+.summary .stat{background:linear-gradient(135deg,#143c64,#09233c);border:1px solid #5b83a9;border-top:3px solid #ffdc53;border-radius:10px;padding:15px;min-width:0}
+.stat small{font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;font-weight:800;color:#b9d2ed}
+.stat strong{display:block;font:900 clamp(1.65rem,4vw,2.25rem)/1.2 Impact,system-ui;color:#fff;margin:4px 0;overflow-wrap:anywhere}
+.stat .stat-detail{font-size:.8rem;color:#d6e4f2}
+.tally-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:17px 0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button[aria-selected=true]{background:#ffd630;color:#0c233a;border-color:#ffd630}
+.legend{color:#aec6dc;font-size:.8rem}
+section[hidden]{display:none!important}
+.source-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:28px 0 12px}
+.source-heading small{color:#bad0e7;font-weight:750}
+.game-grid,.team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:13px}
+.game-card,.team-card{min-width:0;overflow:hidden;background:linear-gradient(145deg,#123a64,#0b2138);border:1px solid #577fa5;border-top:4px solid #ffd630;border-radius:11px;box-shadow:0 14px 28px #0005}
+.game-card-head,.team-card-head{padding:15px 17px 9px}
+.card-source{display:block;color:#8dccff;font-size:.71rem;letter-spacing:.11em;font-weight:900;text-transform:uppercase}
+.game-card h3,.team-card h3{margin:5px 0 6px;font-size:clamp(1.2rem,3.2vw,1.55rem);line-height:1.2;overflow-wrap:anywhere}
+.card-state{color:#d5e5f4;font-size:.81rem;min-height:1.3em}
+.score-list{display:grid;gap:2px;padding:7px 13px 14px}
+.score-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;min-width:0;padding:10px 8px;border-top:1px solid #395778}
+.score-row:first-child{border-top:0}
+.score-team{font-weight:800;overflow-wrap:anywhere}
+.score-controls{display:flex;align-items:center;gap:6px}
+.score-controls button{display:grid;place-items:center;width:37px;height:37px;padding:0;font-size:1.2rem;font-weight:900;border-radius:7px}
+.score-controls input{width:62px;min-height:38px;padding:6px 4px;border:1px solid #86aac8;border-radius:7px;text-align:center;background:#081b32;color:#fff;font:850 1.08rem system-ui;font-variant-numeric:tabular-nums}
+.score-controls input::-webkit-inner-spin-button,.score-controls input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.score-controls input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.team-totals{margin:0;padding:0 16px 15px;color:#b7cee6;font-size:.84rem}
+.empty{border:1px dashed #779cbd;border-radius:10px;padding:22px;background:#102843;color:#e1eaf4}
+.help{margin:24px 0;padding:14px;border-left:4px solid #ffd630;border-radius:8px;background:#102b49}
+.help summary{cursor:pointer;color:#ffe37d;font-weight:800}.help p{font-size:.86rem;color:#cad9eb}
+footer{padding-top:25px;margin-top:35px;border-top:1px solid #406486;color:#b5cae0;font-size:.8rem}
+@media(max-width:500px){.score-row{grid-template-columns:1fr;gap:6px}.score-controls{justify-content:flex-end}.top-actions button{padding:10px}.game-card-head,.team-card-head{padding:14px}}
+@media print{body{background:white!important;color:#111!important}main{padding:0;max-width:none}.admin-top,.top-actions,.tally-toolbar,.status-line button,.score-controls button,.help,footer{display:none!important}.game-card,.team-card,.stat{box-shadow:none!important;background:#fff!important;color:#111!important;break-inside:avoid-page;border-color:#aaa}.score-team,.game-card h3,.team-card h3,.stat strong{color:#111!important}.score-controls input{background:#fff;color:#111;border:0}.summary .stat{border:1px solid #bbb}.card-source,.card-state,.stat small,.stat .stat-detail{color:#444!important}h2{color:#111!important}}
+</style><link rel="stylesheet" href="/responsive.css"><link rel="icon" href="/favicon.png">
+</head><body><main>
+<header class="admin-top"><div class="nav-left"><a class="home" href="/admin/" aria-label="Mission Control">⌂</a><details class="menu-wrap"><summary>☰ Menu</summary><nav class="menu-list" aria-label="Organizer navigation"><a href="/admin/">Mission Control</a><a href="/admin/planner">Squad Planner</a><a href="/admin/teams">Team Assignments</a><a href="/admin/tally" aria-current="page">Game Tally</a><a href="/admin/responses">Form Responses</a><a href="/">Public Friendsgiving Page</a></nav></details></div><div class="top-actions"><button id="refreshScores" type="button">↻ Refresh</button><button id="printScores" type="button">Print</button></div></header>
+<p class="eyebrow">◆ FRIENDSGIVING / MISSION CONTROL</p><h1>Game Tally.</h1><p class="intro">Track points for each squad across all games and relays. Game names sync from Mission Control and the Planner; team names sync from Team Assignments. Scores save to the Friendsgiving cloud.</p>
+<div class="status-line"><p id="tallyStatus" role="status" aria-live="polite">Loading live teams and games…</p><span id="syncStamp" class="muted"></span></div>
+<div class="summary" id="leaderboard" aria-label="Overall team leaderboard"></div>
+<div class="tally-toolbar"><div class="tabs" role="tablist" aria-label="Scoreboard view"><button id="byGame" type="button" role="tab" aria-selected="true" aria-controls="gamesView">By Game</button><button id="byTeam" type="button" role="tab" aria-selected="false" aria-controls="teamsView">By Team</button></div><span class="legend">+ / − adds or removes points · Enter a number for an exact score</span></div>
+<section id="gamesView" role="tabpanel" aria-labelledby="byGame"><div id="gamesContent"></div></section>
+<section id="teamsView" role="tabpanel" aria-labelledby="byTeam" hidden><div id="teamsContent"></div></section>
+<details class="help"><summary>How scoring and syncing work</summary><p>Games added, renamed or removed in Mission Control and the Planner appear automatically. Team changes also refresh automatically. Each game is scored separately for each team, with an overall total. Renamed Mission Control game slots and recognized Planner game renames keep their scores. Removed games are hidden rather than immediately deleting historical points; if a game returns, its saved points may be restored. Open the Planner or Mission Control to edit game names, not this score sheet.</p><p>Updates are checked regularly while this page is open, and whenever you return to it. Every score change saves to the shared Cloudflare database. If another organizer updates a score at the same time, you’ll see a conflict warning and the newest data will be reloaded.</p></details>
+<footer>Friendsgiving 2026 · Game Tally · Private organizer workspace</footer></main>
+<script src="/game-tally.js?v=20261104-1" defer></script></body></html>
