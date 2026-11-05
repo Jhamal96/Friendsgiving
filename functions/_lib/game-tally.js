@@ -45,7 +45,17 @@ export function reconcileTallyGames(current,source){
    !used.has(x.id)&&!active.some(now=>now.source==='planner'&&normGame(now.title)===normGame(x.title)));
   if(prior){entry.id=prior.id;used.add(prior.id)}
  }
- for(const entry of active)if(!entry.id)entry.id='planner:'+crypto.randomUUID();
+ // Newly discovered games need a deterministic identity before the first
+ // score is saved; otherwise a refresh would generate a different ID.
+ const seenNew=new Map();
+ for(const entry of active)if(!entry.id){
+  const title=normGame(entry.title);
+  let hash=2166136261;
+  for(const char of title){hash^=char.codePointAt(0);hash=Math.imul(hash,16777619)}
+  const key=(hash>>>0).toString(36);
+  const occurrence=seenNew.get(key)||0;seenNew.set(key,occurrence+1);
+  entry.id='planner:'+key+(occurrence?'-'+occurrence:'');
+ }
  const activeIds=new Set(active.map(x=>x.id));
  const archived=history.filter(x=>!activeIds.has(x.id));
  return {active,history:[...active,...archived]};
