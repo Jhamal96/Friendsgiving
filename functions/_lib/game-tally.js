@@ -45,6 +45,15 @@ export function reconcileTallyGames(current,source){
    !used.has(x.id)&&!active.some(now=>now.source==='planner'&&normGame(now.title)===normGame(x.title)));
   if(prior){entry.id=prior.id;used.add(prior.id)}
  }
+ // A single renamed game can also move to a new row. When exactly one
+ // unmatched current game and one unmatched former game remain, reuse the ID.
+ const missing=active.filter(x=>x.source==='planner'&&!x.id);
+ const past=history.filter(x=>x.source==='planner'&&!used.has(x.id)&&
+   !active.some(now=>now.source==='planner'&&normGame(now.title)===normGame(x.title)));
+ if(missing.length===1&&past.length===1){
+  missing[0].id=past[0].id;
+  used.add(past[0].id);
+ }
  // Newly discovered games need a deterministic identity before the first
  // score is saved; otherwise a refresh would generate a different ID.
  const seenNew=new Map();
