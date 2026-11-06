@@ -372,86 +372,35 @@ export function guestListEligible(organizer,form={}){
  };
 }
 
+// Keep explicitly chosen team assignments stable. Do not fill empty positions,
+// rebalance teams or reshuffle participants during sync, load or publish.
+// Only the Randomize button in the admin browser may deliberately redistribute.
 export function balanceTeams(input,eligibility,squadRoles={}){
  if(!Array.isArray(input)||!input.length)return {teams:input||[],changed:false,assigned:0,removed:0,added:0,moved:0};
- const teams=input.map(t=>({...t,captain:firstName(t.captain),members:Array.isArray(t.members)?[...t.members]:[]}));
- const alias=eligibility.aliases;
- const canonical=s=>alias.get(nameKey(s))||firstKey(s);
- const captainOwner=new Map();
- for(let i=0;i<teams.length;i++){
-  const key=canonical(teams[i].captain);
+ const aliases=eligibility.aliases||new Map();
+ const canonical=s=>aliases.get(nameKey(s))||firstKey(s);
+ const roles=squadRoles&&typeof squadRoles==='object'?squadRoles:{};
+ const allowed=new Set((eligibility.eligible||[]).filter(p=>!Object.hasOwn(roles,firstKey(p.name))).map(p=>canonical(p.name)));
+ const captainOwners=new Set(),assigned=new Set();
+ const teams=input.map(t=>({...t,members:[]}));
+ for(const team of teams){
+  const key=canonical(team.captain);
   if(!key)continue;
-  if(captainOwner.has(key))return {teams:input,changed:false,error:'The same captain is assigned to multiple teams'};
-  captainOwner.set(key,i);
+  if(captainOwners.has(key))return {teams:input,changed:false,error:'A captain cannot lead more than one team'};
+  captainOwners.add(key);assigned.add(key);
  }
- const before=new Map();
- for(let i=0;i<teams.length;i++)for(const member of teams[i].members){const k=canonical(member);if(!before.has(k))before.set(k,i)}
- // Every verified guest AND every individually paid/confirmed plus-one is
- // one independent player in team randomization. Their shared registration
- // determines eligibility, not which team they must be on.
- const excludedRoles=squadRoles&&typeof squadRoles==='object'?squadRoles:{};
- const playing=p=>!Object.hasOwn(excludedRoles,firstKey(p.name));
- const allowed=new Set(eligibility.eligible.filter(playing).map(p=>canonical(p.name)));
- const groups=[],used=new Set();
- for(const person of eligibility.eligible||[]){
-  if(!playing(person))continue;
-  const key=canonical(person.name);
-  if(!key||!allowed.has(key)||used.has(key))continue;
-  used.add(key);
-  if(captainOwner.has(key))continue; // Captains are reserved on their own teams.
-  groups.push({names:[person.name],keys:[key],sponsorCaptain:null});
- }
-
- const claimed=new Set(),buckets=teams.map(()=>[]),sizes=teams.map(t=>canonical(t.captain)?1:0);
- for(const group of groups){
-  let fixed=group.sponsorCaptain??null;
-  for(const key of group.keys){
-   if(!captainOwner.has(key))continue;
-   const owner=captainOwner.get(key);
-   if(fixed!==null&&owner!==fixed)return {teams:input,changed:false,error:'A captain cannot be assigned to an opposing team'};
-   fixed=owner;
-  }
-  const initial=fixed!==null?fixed:group.keys.map(k=>before.get(k)).find(v=>v!==undefined);
-  const dest=initial===undefined?sizes.indexOf(Math.min(...sizes)):initial;
-  group.members=group.names.filter((n,i)=>!captainOwner.has(group.keys[i])&&!claimed.has(group.keys[i]));
-  buckets[dest].push(...group.members);
-  group.keys.forEach(k=>claimed.add(k));
-  group.owner=dest;group.locked=fixed!==null;
-  sizes[dest]+=group.members.length;
- }
- // Move the minimum number of groups necessary to reduce imbalance.
- for(let pass=0;pass<groups.length*2;pass++){
-  let best=null,score=sizes.reduce((v,n)=>v+n*n,0);
-  for(const group of groups){
-   if(group.locked||!group.members.length)continue;
-   for(let to=0;to<teams.length;to++){
-    if(to===group.owner)continue;
-    const weight=group.members.length,from=group.owner;
-    const next=score-sizes[from]**2-sizes[to]**2+(sizes[from]-weight)**2+(sizes[to]+weight)**2;
-    if(next<score){score=next;best={group,to}}
+ let removed=0;
+ for(let i=0;i<input.length;i++){
+  for(const member of Array.isArray(input[i].members)?input[i].members:[]){
+   const key=canonical(member);
+   if(!key||captainOwners.has(key)||assigned.has(key)||!allowed.has(key)){
+    removed++;continue;
    }
+   assigned.add(key);
+   teams[i].members.push(member);
   }
-  if(!best)break;
-  const {group,to}=best,from=group.owner;
-  buckets[from]=buckets[from].filter(m=>!group.members.some(x=>canonical(x)===canonical(m)));
-  buckets[to].push(...group.members);
-  sizes[from]-=group.members.length;sizes[to]+=group.members.length;group.owner=to;
  }
- // Keep the existing team-member display order when reconciliation has
- // nothing to change. Explicit randomization produces a new saved order.
- teams.forEach((t,i)=>{
-  const positions=new Map(t.members.map((name,index)=>[canonical(name),index]));
-  buckets[i].sort((a,b)=>{
-   const left=positions.get(canonical(a)),right=positions.get(canonical(b));
-   return (left===undefined?Infinity:left)-(right===undefined?Infinity:right);
-  });
-  t.members=buckets[i];
- });
- const now=new Set(teams.flatMap(t=>t.members.map(canonical)));
- let added=0,moved=0,removed=0;
- teams.forEach((t,i)=>t.members.forEach(n=>{const k=canonical(n);if(!before.has(k))added++;else if(before.get(k)!==i)moved++}));
- for(const t of input)for(const n of t.members||[])if(!now.has(canonical(n)))removed++;
- return {teams,changed:!same(teams,input),assigned:claimed.size,removed,added,moved};
+ return {teams,changed:!same(teams,input),assigned:assigned.size,removed,added:0,moved:0};
 }
 
 export async function reconcileTeams(db){
