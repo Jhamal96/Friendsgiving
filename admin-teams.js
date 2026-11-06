@@ -252,8 +252,40 @@ function render(){
 // The organizer-only printable roster always reflects the current team draft.
 // No roster is sent to the public API or another service; PDF comes from Print.
 const listDialog=$('teamListDialog'),listContents=$('teamListContents');
-function showPrintableTeams(){
+async function showPrintableTeams(){
  if(!teams.length){status.textContent='Create a team before opening the roster list.';return}
+ const seeButton=$('seeTeams');
+ seeButton.disabled=true;
+ let shirtByKey=new Map(),shirtByFirst=new Map(),shirtWarning='';
+ try{
+  // Fetch the current synced Guest List on every preview, rather than reusing
+  // potentially stale team-editor data. Shirt size is column 7 (index 6).
+  const response=await fetch('/admin/api/planner',{cache:'no-store'});
+  if(!response.ok)throw Error('Guest List could not be refreshed');
+  const payload=await response.json();
+  const rows=payload?.data?.guests;
+  if(!Array.isArray(rows))throw Error('Guest List response is incomplete');
+  const firstRows=new Map();
+  for(const row of rows){
+   if(!Array.isArray(row)||typeof row[0]!=='string'||!row[0].trim())continue;
+   const full=nameKey(row[0]),first=full.split(' ')[0];
+   if(!full||!first)continue;
+   const size=String(row[6]||'').trim();
+   if(shirtByKey.has(full))shirtByKey.set(full,null);
+   else shirtByKey.set(full,size||'—');
+   const existing=firstRows.get(first);
+   if(existing)firstRows.set(first,{ambiguous:true});
+   else firstRows.set(first,{size:size||'—',ambiguous:false});
+  }
+  shirtByFirst=new Map([...firstRows].map(([key,v])=>[key,v.ambiguous?null:v.size]));
+ }catch(err){shirtWarning='⚠ Could not load current shirt sizes. Reopen See Teams after the Guest List connection is restored.'}
+ finally{seeButton.disabled=false}
+ const shirtSize=name=>{
+  const key=nameKey(name);
+  const exact=shirtByKey.get(key);
+  if(exact!==undefined)return exact||'—';
+  return shirtByFirst.get(key.split(' ')[0])||'—';
+ };
  listContents.replaceChildren();
  const grid=el('div','team-list-grid'),allKeys=new Set(),duplicates=[];
  let total=0;
@@ -274,14 +306,16 @@ function showPrintableTeams(){
    if(key)allKeys.add(key);
    total++;
    const li=el('li',person.captain?'team-list-captain':'');
-   li.append(document.createTextNode(person.name));
-   if(person.captain)li.append(el('span','','★ Captain'));
+   const name=el('span','team-list-person-name',person.name);
+   if(person.captain)name.append(el('span','team-list-captain-label',' ★ Captain'));
+   li.append(name,el('span','team-list-size','Size: '+shirtSize(person.name)));
    list.append(li);
   }
   if(!people.length)list.append(el('li','','No players assigned'));
   article.append(list);grid.append(article);
  });
  listContents.append(grid);
+ if(shirtWarning)listContents.prepend(el('p','team-list-warning',shirtWarning));
  if(duplicates.length){
   const warning=el('p','team-list-warning','⚠ '+duplicates.length+' duplicate '+(duplicates.length===1?'assignment':'assignments')+' found. Review the teams before printing or publishing.');
   listContents.prepend(warning);
