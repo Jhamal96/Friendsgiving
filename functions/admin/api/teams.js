@@ -86,7 +86,7 @@ export async function onRequestPost({request,env}){
   for(const team of cleaned)for(const member of team.members){
    if(!eligible.has(eligibleKey(member)))return reply({error:'Only Guest List players with both RSVP = Yes and Paid = Yes and a playing role can be published: '+member},400);
   }
-  // Verify all eligible individual players, including paid plus-ones, and keep teams balanced before publishing.
+  // Check eligibility and duplicates while preserving all manual team assignments. Do not rebalance on publish.
   const balanced=balanceTeams(cleaned,eligibility,roles);
   if(balanced.error)return reply({error:balanced.error},400);
   const next={...data,teams:balanced.teams,teamsPublished:true};
