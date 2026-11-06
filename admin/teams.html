@@ -139,20 +139,31 @@ dialog{width:min(92vw,650px);max-height:88vh;overflow:auto;border:1px solid #698
 @media(max-width:690px){.team-list-grid{grid-template-columns:1fr}.team-list-dialog{width:95vw}.team-list-actions button{flex:1}}
 @media(max-width:620px){#teamManager>.controls #seeTeams{grid-column:1/-1;grid-row:4}#teamManager>.controls>a{grid-row:5}}
 @media print{
- @page{size:auto;margin:13mm}
- html,body{background:#fff!important;color:#000!important}
+ /* Letter and A4 share a safe print area; avoid the browser's clipped edges. */
+ @page{size:auto;margin:9mm}
+ html,body{width:auto!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important;background:#fff!important;color:#000!important}
  body>main,body>main>*:not(#teamListDialog){display:none!important}
- body>main{display:block!important;margin:0!important;padding:0!important;max-width:none!important}
- #teamListDialog{position:static!important;inset:auto!important;display:block!important;width:100%!important;max-width:none!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border:0!important;border-radius:0!important;padding:0!important;margin:0!important;background:#fff!important;color:#000!important}
+ body>main{display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
+ #teamListDialog{position:static!important;inset:auto!important;display:block!important;box-sizing:border-box!important;width:100%!important;min-width:0!important;max-width:100%!important;max-height:none!important;overflow:visible!important;transform:none!important;box-shadow:none!important;border:0!important;border-radius:0!important;padding:0!important;margin:0!important;background:#fff!important;color:#000!important}
  #teamListDialog::backdrop{display:none!important}
  .team-list-actions{display:none!important}
- .team-list-paper{padding:0!important}
- .team-list-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10mm;margin-top:10mm}
- .team-list-entry{break-inside:avoid-page;page-break-inside:avoid}
- .team-list-entry-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
- .team-list-people li{padding:4px 2px}
- .team-list-size{background:#fff!important;border:1px solid #aaa!important;color:#111!important;print-color-adjust:exact}
- .team-list-header{break-after:avoid-page}
+ .team-list-paper{box-sizing:border-box!important;width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:0!important;font-size:10.5pt!important;line-height:1.26!important}
+ .team-list-header{padding:0 0 3mm!important;margin:0!important;break-after:avoid-page;page-break-after:avoid}
+ .team-list-header h2{font-size:23pt!important;margin:1mm 0!important}
+ .team-list-header p{font-size:8.5pt!important}
+ .team-list-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5mm!important;margin-top:5mm!important;align-items:start;width:100%!important}
+ .team-list-entry{box-sizing:border-box!important;min-width:0!important;width:100%!important;margin:0!important;border:1px solid #a9b9c8!important;border-radius:4px!important;overflow:hidden!important;break-inside:avoid-page;page-break-inside:avoid}
+ .team-list-entry-header{padding:3mm!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ .team-list-entry-header h3{font-size:15pt!important;line-height:1.05!important}
+ .team-list-entry-header p{font-size:8pt!important;line-height:1.22!important}
+ .team-list-people{padding:1mm 2.5mm 2mm!important;margin:0!important}
+ .team-list-people li{box-sizing:border-box!important;min-width:0!important;display:flex!important;align-items:baseline!important;gap:1.5mm!important;padding:1.6mm 0!important;font-size:9pt!important;line-height:1.18!important;break-inside:avoid}
+ .team-list-people li::before{flex:0 0 6mm!important;font-size:7pt!important}
+ .team-list-person-name{flex:1 1 auto!important;min-width:0!important;overflow-wrap:anywhere!important}
+ .team-list-size{flex:0 0 auto!important;margin-left:auto!important;padding:0 .8mm!important;background:#fff!important;border:1px solid #aaa!important;border-radius:2px!important;color:#111!important;font-size:7.5pt!important;white-space:nowrap!important;print-color-adjust:exact}
+ .team-list-captain-label{font-size:7.5pt!important}
+ .team-list-warning{padding:2mm!important;margin:3mm 0!important;font-size:8pt!important}
+ .team-list-footer{margin-top:4mm!important;padding-top:2mm!important;font-size:7.5pt!important}
 }
 </style><link rel="stylesheet" href="/responsive.css"><script defer src="/device-layout.js"></script><link rel="stylesheet" href="/admin-opening.css"><link rel="stylesheet" href="/admin-connections.css"><link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=20261102-exact-upload"><link rel="shortcut icon" href="/favicon.ico?v=20261102-exact-upload"><link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=20261102-exact-upload"><link rel="manifest" href="/admin/manifest.webmanifest?v=20261102-ios-separate"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="FG Admin"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="stylesheet" href="/emoji-picker.css?v=20261103"><link rel="stylesheet" href="/site-search.css?v=20261103-search1"></head>
 <body><div id="fgLoader" role="status" aria-label="Friendsgiving admin opening animation"><video id="fgOpeningVideo" src="/friendsgiving-intro.mp4" muted playsinline webkit-playsinline preload="metadata" aria-label="Friendsgiving opening video"></video><div class="intro-fallback" aria-hidden="true"><div class="halo-ring"></div><strong>MISSION CONTROL</strong><span>Initializing Friendsgiving</span></div><button class="skip" id="fgSkip" type="button">Skip intro</button></div><main><header class="admin-top"><div class="admin-nav-left"><a class="admin-home" href="/admin/" aria-label="Home — Mission Control" title="Go to Mission Control"><svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-8h6v8"/></svg></a><details class="menu-wrap"><summary aria-label="Open organizer navigation">☰ Menu</summary><nav class="menu-list" aria-label="Organizer navigation"><a href="/admin/">Mission Control<span class="menu-desc">Edit the main page</span></a><a href="/admin/planner">Squad Planner<span class="menu-desc">Guests, payments and planning</span></a><a href="/admin/teams">Team Assignments<span class="menu-desc">Create teams, captains and rosters</span></a><a href="/admin/tally">Game Tally<span class="menu-desc">Live scores by team and game</span></a><a href="/admin/responses">Form Responses<span class="menu-desc">Match form respondents to existing guests</span></a><a href="/">Friends’ Page<span class="menu-desc">See published assignments</span></a></nav></details><button type="button" class="fg-emoji-launch" data-fg-emoji-open aria-label="Open emoji picker" title="Add emojis to editable text">😊</button></div><button class="settings-button" type="button" id="teamsHelpButton" aria-label="Teams help and updates">⚙</button></header>
