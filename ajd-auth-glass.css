@@ -1,0 +1,14 @@
+/* AJD shared authentication appearance — opt-in stylesheet.
+   No authentication state, secrets, or permissions are modified. */
+:root{--ajd-auth-bg:#090d16;--ajd-auth-text:#f5f7ff;--ajd-auth-border:rgba(255,255,255,.24);--ajd-auth-glass:rgba(255,255,255,.10);--ajd-auth-accent:#78baff}
+.ajd-auth-screen{min-height:100dvh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 20% 15%,#3263a65c,transparent 48%),var(--ajd-auth-bg);color:var(--ajd-auth-text);font-family:system-ui,-apple-system,sans-serif}
+.ajd-auth-card{width:min(100%,440px);padding:clamp(22px,5vw,36px);border:1px solid var(--ajd-auth-border);border-radius:28px;background:var(--ajd-auth-glass);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);box-shadow:0 24px 90px #0005}
+.ajd-auth-card h1{font-size:clamp(24px,4vw,32px);margin:0 0 10px}.ajd-auth-card p{line-height:1.5}
+.ajd-auth-field{display:block;width:100%;min-height:48px;padding:12px 14px;margin:12px 0;border:1px solid var(--ajd-auth-border);border-radius:14px;background:#ffffff12;color:inherit;font:inherit}
+.ajd-auth-button{width:100%;min-height:48px;margin-top:12px;border:0;border-radius:14px;background:var(--ajd-auth-accent);color:#071629;font:700 15px system-ui;cursor:pointer}
+.ajd-auth-button:disabled{opacity:.5;cursor:not-allowed}.ajd-auth-field:focus-visible,.ajd-auth-button:focus-visible{outline:3px solid #9cd1ff;outline-offset:2px}
+.ajd-auth-message{min-height:24px;font-size:14px}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=amoled]){--ajd-auth-bg:#e9f1fa;--ajd-auth-text:#17283d;--ajd-auth-border:#ffffffbb;--ajd-auth-glass:#ffffff88}}
+:root[data-theme=amoled]{--ajd-auth-bg:#000;--ajd-auth-glass:#080808;--ajd-auth-border:#303030}
+@media(prefers-reduced-motion:reduce){.ajd-auth-card,.ajd-auth-button{transition:none!important}}
+@supports not (backdrop-filter:blur(1px)){.ajd-auth-card{background:#19283d}}
