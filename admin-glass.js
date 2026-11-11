@@ -17,7 +17,10 @@
     section.innerHTML = '<h3>Liquid Glass</h3><p>Crystal-clear admin panels with readable text. Off each time you open a page.</p><label for="fgGlassOn">Enable Liquid Glass <input type="checkbox" id="fgGlassOn" role="switch"></label><label for="fgGlassTint">Tint and blur</label><input id="fgGlassTint" type="range" min="0" max="100" step="1" value="8"><div class="fg-glass-meter"><span>Clear</span><output id="fgGlassValue" for="fgGlassTint">8%</output><span>Tinted</span></div><p class="fg-glass-note">Use low tint to see through panels. Text contrast is maintained; reduced-transparency preferences are respected.</p>';
     let dialog = null;
     if (target) {
-      target.appendChild(section);
+      // Show the Liquid Glass toggle immediately under the Settings heading.
+      const heading = target.querySelector('h2,h3');
+      if (heading) heading.insertAdjacentElement('afterend',section);
+      else target.prepend(section);
     } else {
       dialog = document.createElement('dialog');
       dialog.id = 'fgGlassDialog';
