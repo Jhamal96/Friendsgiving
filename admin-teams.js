@@ -329,6 +329,12 @@ async function showPrintableTeams(){
  $('teamListMeta').textContent=teams.length+' '+(teams.length===1?'team':'teams')+' · '+allKeys.size+' unique players · '+state;
  listDialog.showModal();
 }
+const includeShirtSizes=$('includeShirtSizes');
+function syncShirtSizeVisibility(){
+ listDialog.classList.toggle('hide-shirt-sizes',!includeShirtSizes.checked);
+}
+includeShirtSizes.addEventListener('change',syncShirtSizeVisibility);
+syncShirtSizeVisibility();
 $('seeTeams').addEventListener('click',showPrintableTeams);
 $('closeTeamList').addEventListener('click',()=>listDialog.close());
 $('printTeamList').addEventListener('click',()=>window.print());
