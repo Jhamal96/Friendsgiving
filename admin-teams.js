@@ -11,7 +11,12 @@ const ROLE_OPTIONS=[
  ['volunteer','Event staff / volunteer'],['spectator','Spectator'],['other','Other position']
 ];
 const cards=$('teamCards'),status=$('teamStatus'),save=$('saveTeams'),unpublish=$('unpublishTeams'),publication=$('teamPublicationStatus');
-const serial=teamList=>JSON.stringify(teamList);
+// Compare the same stable fields in drafts and published API responses.
+// Older published records omit optional customName; property order can also differ.
+const serial=teamList=>JSON.stringify((Array.isArray(teamList)?teamList:[]).map(t=>({
+ id:t.id,name:t.name,customName:String(t.customName||''),caption:String(t.caption||''),
+ captain:t.captain,captainPhoto:String(t.captainPhoto||''),members:Array.isArray(t.members)?t.members:[]
+})));
 function refreshPublishButton(){
  save.disabled=publishing||rolesBusy||blocked||!teams.length||(isPublished&&serial(teams)===publishedBaseline);
  save.textContent=isPublished?'Publish changes':'Publish teams';
