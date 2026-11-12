@@ -219,7 +219,10 @@ function render(){
   const memberKeys=new Set((team.members||[]).map(canonical).filter(key=>key&&key!==captainKey));
   const playerCount=memberKeys.size+(captainKey?1:0);
   const heading=el('div','team-card-heading');
-  heading.append(el('h2','',team.name||'New team'));
+  const teamTitle=el('div','team-title-group');
+  teamTitle.append(el('h2','',team.name||'New team'));
+  if(team.customName?.trim())teamTitle.append(el('p','team-custom-name',team.customName.trim()));
+  heading.append(teamTitle);
   const count=el('div','team-player-count');
   count.setAttribute('aria-label',playerCount+' '+(playerCount===1?'player':'players')+' assigned to '+(team.name||'this team'));
   count.append(el('strong','team-player-number',String(playerCount)));
@@ -238,6 +241,7 @@ function render(){
   card.append(captainInfo);
   const roster=el('p','roster','Members: '+(team.members.length?team.members.join(', '):'No additional players yet'));card.append(roster);
   const actions=el('div','team-actions');
+  actions.append(btn(team.customName?.trim()?'✎ Edit team name':'+ Add team name',()=>openTeamName(index),'team-name-action'));
   actions.append(btn('Edit team',()=>openEditor(index),'primary'));
   const up=btn('↑',()=>move(index,-1)),down=btn('↓',()=>move(index,1));up.title='Move team up';down.title='Move team down';up.disabled=index===0;down.disabled=index===teams.length-1;actions.append(up,down);
   actions.append(btn('Remove',()=>{if(!confirm('Remove '+(team.name||'this team')+' from the team lineup?'))return;teams.splice(index,1);markDirty();render()},'danger'));
@@ -293,6 +297,7 @@ async function showPrintableTeams(){
   const article=el('section','team-list-entry');
   const head=el('div','team-list-entry-header');
   head.append(el('h3','',team.name||'Team '+(index+1)));
+  if(team.customName?.trim())head.append(el('p','team-list-custom-name',team.customName.trim()));
   const captain=String(team.captain||'').trim();
   const members=Array.isArray(team.members)?team.members.filter(n=>String(n).trim()):[];
   const people=[...(captain?[{name:captain,captain:true}]:[]),...members.map(name=>({name,captain:false}))];
@@ -328,14 +333,42 @@ $('seeTeams').addEventListener('click',showPrintableTeams);
 $('closeTeamList').addEventListener('click',()=>listDialog.close());
 $('printTeamList').addEventListener('click',()=>window.print());
 function move(index,delta){const other=index+delta;if(other<0||other>=teams.length)return;[teams[index],teams[other]]=[teams[other],teams[index]];markDirty();render()}
+// Optional custom squad names keep the original Blue/Yellow labels and stable
+// team IDs. Player order, captain, eligibility, and scores are never touched.
+const teamNameDialog=$('teamNameDialog'),teamNameInput=$('customTeamNameInput');
+let editingTeamNameIndex=-1;
+function openTeamName(index){
+ const team=teams[index];if(!team)return;
+ editingTeamNameIndex=index;
+ $('teamNameBase').textContent='Team: '+(team.name||'Unnamed');
+ teamNameInput.value=String(team.customName||'');
+ $('teamNameError').textContent='';
+ teamNameDialog.showModal();
+ teamNameInput.focus();
+ teamNameInput.select();
+}
+$('cancelTeamName').addEventListener('click',()=>teamNameDialog.close());
+$('teamNameForm').addEventListener('submit',event=>{
+ event.preventDefault();
+ const team=teams[editingTeamNameIndex];if(!team)return;
+ const next=teamNameInput.value.trim();
+ if(next.length>80){$('teamNameError').textContent='Keep the team name under 80 characters.';return}
+ if(next&&teams.some((other,i)=>i!==editingTeamNameIndex&&String(other.customName||'').trim().toLowerCase()===next.toLowerCase())){
+  $('teamNameError').textContent='That custom name is already being used by another team.';return;
+ }
+ if(String(team.customName||'').trim()!==next){
+  team.customName=next;markDirty();render();
+ }
+ teamNameDialog.close();
+});
 function openEditor(index){
  const creating=index===null;
- const draft=creating?{id:'team-'+crypto.randomUUID(),name:'',caption:'',captain:'',members:[]}:structuredClone(teams[index]);
+ const draft=creating?{id:'team-'+crypto.randomUUID(),name:'',customName:'',caption:'',captain:'',members:[]}:structuredClone(teams[index]);
  const modal=$('editTeam');$('editTeamTitle').textContent=creating?'Add a team':'Edit team';
  const area=$('teamFields');area.replaceChildren();
  draft.captainPhoto=typeof draft.captainPhoto==='string'?draft.captainPhoto:'';
  let photoOwner=nameKey(draft.captain),updatePhotoPreview=()=>{};
- for(const [label,key,max] of [['Team name','name',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
+ for(const [label,key,max] of [['Team color / label','name',80],['Custom team name (optional)','customName',80],['Team captain','captain',100],['Team motto (optional)','caption',220]]){
   const field=input(label,draft[key],max,v=>{draft[key]=v;if(key==='captain')updatePhotoPreview()});area.append(field.label);
  }
  const photoBox=el('div','captain-photo-editor');
@@ -430,7 +463,10 @@ function openEditor(index){
  const submit=$('confirmTeam'),cancel=$('cancelTeam');
  submit.onclick=()=>{
  if(!draft.name.trim()){error.textContent='Enter a team name.';area.querySelector('input').focus();return}
- draft.name=draft.name.trim();draft.caption=draft.caption.trim();draft.captain=cleanName(draft.captain);draft.members=uniqueMembers(draft.members);
+ draft.name=draft.name.trim();draft.customName=String(draft.customName||'').trim();draft.caption=draft.caption.trim();draft.captain=cleanName(draft.captain);draft.members=uniqueMembers(draft.members);
+ if(draft.customName&&teams.some((other,i)=>i!==index&&String(other.customName||'').trim().toLowerCase()===draft.customName.toLowerCase())){
+  error.textContent='Another team already uses this custom name. Choose a different one.';return;
+ }
  if(nameKey(draft.captain)!==photoOwner)draft.captainPhoto='';
  const key=canonical(draft.captain);
  if(key){
@@ -448,7 +484,7 @@ function openEditor(index){
 function teamsSearch(query,matches){
  const result=[];
  teams.forEach((team,index)=>{
-  const name=String(team.name||'Untitled team');
+  const name=[String(team.name||'Untitled team'),String(team.customName||'').trim()].filter(Boolean).join(' · ');
   const captain=String(team.captain||'Unassigned');
   const people=Array.isArray(team.members)?team.members:[];
   const reveal=()=>window.FriendsgivingSearch?.navigate(cards.querySelector('[data-team-index="'+index+'"]'));
