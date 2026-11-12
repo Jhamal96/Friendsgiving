@@ -45,7 +45,7 @@ export async function onRequestPost({request,env}){
    // Match exactly against a published player name. Never perform prefix or partial search.
    if(normalized(team.captain)!==key&&!team.members.some(member=>typeof member==='string'&&normalized(member)===key))continue;
    if(result)return reply({found:false}); // Ambiguous assignments: disclose nothing.
-   result={found:true,team:team.name.trim(),captain:typeof team.captain==='string'&&team.captain.trim()?team.captain.trim():'To be announced',captainPhoto:cleanCaptainPhoto(team.captainPhoto)||'',caption:typeof team.caption==='string'?team.caption.slice(0,220):''};
+   result={found:true,team:team.name.trim(),customName:typeof team.customName==='string'?team.customName.trim().slice(0,80):'',captain:typeof team.captain==='string'&&team.captain.trim()?team.captain.trim():'To be announced',captainPhoto:cleanCaptainPhoto(team.captainPhoto)||'',caption:typeof team.caption==='string'?team.caption.slice(0,220):''};
   }
   return reply(result||{found:false});
  }catch{return reply({error:'Unable to look up your team'},503)}
