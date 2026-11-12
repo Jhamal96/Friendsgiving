@@ -20,7 +20,7 @@ const validTeams=input=>{
  for(const t of input){
   if(!t||Array.isArray(t)||typeof t!=='object'||typeof t.id!=='string'||!/^[a-zA-Z0-9_-]{1,90}$/.test(t.id)||ids.has(t.id))return null;
   ids.add(t.id);
-  if(typeof t.name!=='string'||!clean(t.name)||clean(t.name).length>80||typeof t.caption!=='string'||clean(t.caption).length>220||typeof t.captain!=='string'||clean(t.captain).length>100||!Array.isArray(t.members)||t.members.length>150)return null;
+  if((t.customName!==undefined&&t.customName!==null&&typeof t.customName!=='string')||clean(t.customName||'').length>80||typeof t.name!=='string'||!clean(t.name)||clean(t.name).length>80||typeof t.caption!=='string'||clean(t.caption).length>220||typeof t.captain!=='string'||clean(t.captain).length>100||!Array.isArray(t.members)||t.members.length>150)return null;
   const members=[];
   for(const member of t.members){
    if(typeof member!=='string'||!clean(member)||clean(member).length>100)return null;
@@ -30,7 +30,7 @@ const validTeams=input=>{
   }
   const captainPhoto=cleanCaptainPhoto(t.captainPhoto);
   if(captainPhoto===null)return null;
-  output.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),captainPhoto,members});
+  output.push({id:t.id,name:clean(t.name),customName:clean(t.customName||''),caption:clean(t.caption),captain:cleanName(t.captain),captainPhoto,members});
  }
  return output;
 };
