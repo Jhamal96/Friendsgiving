@@ -17,7 +17,7 @@ async function readData(env){
  const candidate=published?organizer.teams:Array.isArray(draft)?draft:draft.teams;
  const teams=(Array.isArray(candidate)?candidate:organizer.teams||[])
   .filter(t=>t&&typeof t.id==='string'&&typeof t.name==='string')
-  .map(t=>({id:t.id,name:t.name.trim().slice(0,80),captain:String(t.captain||'').trim().slice(0,100)}))
+  .map(t=>({id:t.id,name:(t.name.trim()+(typeof t.customName==='string'&&t.customName.trim()?' · '+t.customName.trim().slice(0,80):'')).slice(0,165),captain:String(t.captain||'').trim().slice(0,100)}))
   .filter(t=>t.name);
  const tally=results[3]?.content?JSON.parse(results[3].content):emptyTally();
  const {active,history}=reconcileTallyGames(tally,collectTallyGames(settings,organizer));
