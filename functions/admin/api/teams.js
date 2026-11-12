@@ -17,7 +17,7 @@ const confirmedGuests=data=>{
  }
  return Array.from(names.values()).slice(0,500).sort((a,b)=>a.localeCompare(b));
 };
-const safeTeams=teams=>Array.isArray(teams)?teams.filter(t=>t&&typeof t.name==='string').map(t=>({id:t.id,name:t.name,caption:t.caption,captain:t.captain,...(Object.hasOwn(t,'captainPhoto')?{captainPhoto:cleanCaptainPhoto(t.captainPhoto)||''}:{}),members:t.members})):[];
+const safeTeams=teams=>Array.isArray(teams)?teams.filter(t=>t&&typeof t.name==='string').map(t=>({id:t.id,name:t.name,customName:clean(t.customName||''),caption:t.caption,captain:t.captain,...(Object.hasOwn(t,'captainPhoto')?{captainPhoto:cleanCaptainPhoto(t.captainPhoto)||''}:{}),members:t.members})):[];
 export async function onRequestGet({request,env}){
  try{
   if(!validHost(new URL(request.url).hostname))return reply({error:'Invalid host'},403);
@@ -70,7 +70,7 @@ export async function onRequestPost({request,env}){
   for(const t of teams){
    if(!t||typeof t!=='object'||Array.isArray(t)||typeof t.id!=='string'||!/^[a-zA-Z0-9_-]{1,90}$/.test(t.id)||ids.has(t.id))return reply({error:'Invalid or duplicate team ID'},400);
    ids.add(t.id);
-   if(typeof t.name!=='string'||!clean(t.name)||clean(t.name).length>80||typeof t.caption!=='string'||clean(t.caption).length>220||typeof t.captain!=='string'||clean(t.captain).length>100||!Array.isArray(t.members)||t.members.length>150)return reply({error:'Invalid team fields'},400);
+   if((t.customName!==undefined&&t.customName!==null&&typeof t.customName!=='string')||clean(t.customName||'').length>80||typeof t.name!=='string'||!clean(t.name)||clean(t.name).length>80||typeof t.caption!=='string'||clean(t.caption).length>220||typeof t.captain!=='string'||clean(t.captain).length>100||!Array.isArray(t.members)||t.members.length>150)return reply({error:'Invalid team fields'},400);
    const members=[];
    for(const member of t.members){
     if(typeof member!=='string'||!clean(member)||clean(member).length>100)return reply({error:'Invalid member name'},400);
@@ -80,7 +80,7 @@ export async function onRequestPost({request,env}){
    }
    const captainPhoto=cleanCaptainPhoto(t.captainPhoto);
    if(captainPhoto===null)return reply({error:'Invalid or oversized captain photo for '+clean(t.name)},400);
-   cleaned.push({id:t.id,name:clean(t.name),caption:clean(t.caption),captain:cleanName(t.captain),captainPhoto,members});
+   cleaned.push({id:t.id,name:clean(t.name),customName:clean(t.customName||''),caption:clean(t.caption),captain:cleanName(t.captain),captainPhoto,members});
   }
   const eligible=new Set(eligibility.eligible.filter(p=>!roles[squadRoleKey(p.name)]).map(p=>eligibleKey(p.name)));
   for(const team of cleaned)for(const member of team.members){
