@@ -59,6 +59,9 @@ form.addEventListener('submit',async e=>{
   const header=el('div','roster-heading');
   header.append(el('span','roster-index','YOUR ASSIGNMENT'));
   header.append(el('h3','roster-name',result.team));
+  if(typeof result.customName==='string'&&result.customName.trim()){
+   header.append(el('p','roster-custom-name',result.customName.trim().slice(0,80)));
+  }
   card.append(header);
   const gamer=el('section','captain-gamer-card');
   gamer.setAttribute('aria-label','Team captain gamer card');
